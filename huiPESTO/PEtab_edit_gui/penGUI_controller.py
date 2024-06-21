@@ -1,0 +1,288 @@
+from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
+import pandas as pd
+from C import *
+from utils import ParameterInputDialog, ObservableInputDialog, \
+    MeasurementInputDialog, ObservableFormulaInputDialog, \
+    ConditionInputDialog, set_dtypes
+from penGUI_model import PandasTableModel, SbmlViewerModel
+
+
+class Controller:
+    def __init__(self, view, data_frames, sbml_model):
+        self.view = view
+
+        _data_frames = [
+            set_dtypes(data_frames[0].fillna(""), MEASUREMENT_COLUMNS),
+            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS, "observableId"),
+            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS, "parameterId"),
+            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS, "conditionId")
+        ]
+
+        self.models = [
+            PandasTableModel(_data_frames[0], MEASUREMENT_COLUMNS,
+                             "measurement"),
+            PandasTableModel(_data_frames[1], OBSERVABLE_COLUMNS,
+                             "observable"),
+            PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter"),
+            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition")
+        ]
+        self.sbml_model = SbmlViewerModel(sbml_model=sbml_model)
+        # set the text of the SBML and Antimony model
+        self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
+        self.view.antimony_text_edit.setPlainText(self.sbml_model.antimony_text)
+        self.view.controller = self
+        self.setup_connections()
+
+        self.allowed_columns = {
+            0: MEASUREMENT_COLUMNS,
+            1: OBSERVABLE_COLUMNS,
+            2: PARAMETER_COLUMNS,
+            3: CONDITION_COLUMNS
+        }
+
+    def setup_connections(self):
+        for i, table_view in enumerate(self.view.tables):
+            table_view.setModel(self.models[i])
+            self.view.add_row_buttons[i].clicked.connect(lambda _, x=i: self.add_row(x))
+            self.view.add_column_buttons[i].clicked.connect(lambda _, x=i: self.add_column(x))
+
+        self.view.finish_button.clicked.connect(self.finish_editing)
+        self.view.upload_data_matrix_button.clicked.connect(self.upload_data_matrix)
+        self.models[1].observable_id_changed.connect(self.handle_observable_id_change)
+
+    def upload_data_matrix(self):
+        file_name, _ = QFileDialog.getOpenFileName(self.view, "Open Data Matrix", "", "CSV Files (*.csv);;TSV Files (*.tsv)")
+        if file_name:
+            self.process_data_matrix_file(file_name)
+
+    def process_data_matrix_file(self, file_name):
+        try:
+            data_matrix = self.load_data_matrix(file_name)
+            if data_matrix is None or data_matrix.empty:
+                return
+
+            condition_id = "cond1"
+            self.populate_tables_from_data_matrix(data_matrix, condition_id)
+
+        except Exception as e:
+            QMessageBox.critical(self.view, "Error", f"An error occurred while processing the file: {str(e)}")
+
+    def load_data_matrix(self, file_name):
+        data_matrix = pd.read_csv(file_name, delimiter='\t' if file_name.endswith('.tsv') else ',')
+        if not any(col in data_matrix.columns for col in ["Time", "time", "t"]):
+            QMessageBox.warning(self.view, "Invalid File", "The file must contain a 'Time' column.")
+            return None
+
+        time_column = next(col for col in ["Time", "time", "t"] if col in data_matrix.columns)
+        return data_matrix.rename(columns={time_column: "time"})
+
+    def populate_tables_from_data_matrix(self, data_matrix, condition_id):
+        for col in data_matrix.columns:
+            if col != "time":
+                observable_id = col
+                self.ensure_observable_exists(observable_id)
+                self.ensure_condition_exists(condition_id)
+                self.add_measurement_rows(data_matrix, observable_id, condition_id)
+
+    def ensure_observable_exists(self, observable_id):
+        if observable_id not in self.models[1]._data_frame["observableId"].values:
+            self.models[1].add_row_with_defaults(
+                observableId=observable_id,
+                observableFormula=observable_id
+            )
+
+    def ensure_condition_exists(self, condition_id):
+        if condition_id not in self.models[3]._data_frame["conditionId"].values:
+            self.models[3].add_row_with_defaults(
+                conditionId=condition_id, conditionName=condition_id
+            )
+
+    def add_measurement_rows(self, data_matrix, observable_id, condition_id):
+        for _, row in data_matrix.iterrows():
+            self.models[0].add_row_with_defaults(
+                observableId=observable_id,
+                measurement=row[observable_id],
+                time=row["time"],
+                simulationConditionId=condition_id
+            )
+
+    def add_row(self, table_index):
+        if table_index == 0:
+            self.add_measurement_row()
+        elif table_index == 1:
+            self.add_observable_row()
+        elif table_index == 2:
+            self.add_parameter_row()
+        elif table_index == 3:
+            self.add_condition_row()
+        else:
+            self.models[table_index].add_row()
+
+    def add_measurement_row(self):
+        # conditionId is the index of models[3]
+        condition_ids = self.models[3]._data_frame.index.tolist()
+        observable_ids = self.models[1]._data_frame.index.tolist()
+        dialog = MeasurementInputDialog(condition_ids, observable_ids,
+                                        self.view)
+        if dialog.exec():
+            observable_id, measurement, timepoints, condition_id = dialog.get_inputs()
+            self.process_measurement_inputs(observable_id, measurement,
+                                            timepoints, condition_id)
+
+    def process_measurement_inputs(self, observable_id, measurement,
+                                   timepoints, condition_id):
+        if observable_id and measurement and timepoints:
+            self.add_observable_if_missing(observable_id)
+            self.add_condition_if_missing(condition_id)
+            noise_parameters = self.copy_noise_parameters(observable_id,
+                                                          condition_id)
+            self.models[0].add_row_with_defaults(
+                observableId=observable_id,
+                measurement=measurement,
+                time=timepoints,
+                simulationConditionId=condition_id,
+                noiseParameters=noise_parameters
+            )
+
+    def add_observable_if_missing(self, observable_id):
+        if observable_id not in self.models[1]._data_frame.index.tolist():
+            formula_dialog = ObservableFormulaInputDialog(observable_id,
+                                                          self.view)
+            if formula_dialog.exec():
+                observable_id, observable_formula = formula_dialog.get_inputs()
+                self.models[1].add_row_with_defaults(
+                    observableId=observable_id,
+                    observableFormula=observable_formula
+                )
+
+    def add_condition_if_missing(self, condition_id):
+        if condition_id and condition_id \
+                not in self.models[3]._data_frame.index.tolist():
+            condition_columns = self.models[3]._data_frame.columns.tolist()
+            condition_columns.remove("conditionName")
+            if len(condition_columns) > 1:
+                self.prompt_condition_details(condition_id, condition_columns)
+            else:
+                self.models[3].add_row_with_defaults(
+                    conditionId=condition_id,
+                    conditionName=condition_id
+                )
+
+    def prompt_condition_details(self, condition_id, condition_columns):
+        condition_dialog = ConditionInputDialog(condition_id, condition_columns, self.view)
+        if condition_dialog.exec():
+            condition_inputs = condition_dialog.get_inputs()
+            self.models[3].add_row_with_defaults(**condition_inputs)
+
+    def copy_noise_parameters(self, observable_id, condition_id):
+        noise_parameters = ""
+        measurement_df = self.models[0]._data_frame
+        matching_rows = measurement_df[measurement_df["observableId"] == observable_id]
+        if not matching_rows.empty:
+            if condition_id:
+                preferred_row = matching_rows[matching_rows["simulationConditionId"] == condition_id]
+                if not preferred_row.empty:
+                    noise_parameters = preferred_row["noiseParameters"].iloc[0]
+                else:
+                    noise_parameters = matching_rows["noiseParameters"].iloc[0]
+            else:
+                noise_parameters = matching_rows["noiseParameters"].iloc[0]
+        return noise_parameters
+
+    def add_observable_row(self):
+        dialog = ObservableInputDialog(self.view)
+        if dialog.exec():
+            observable_id, observable_formula = dialog.get_inputs()
+            if observable_id and observable_formula:
+                self.models[1].add_row_with_defaults(
+                    observableId=observable_id,
+                    observableFormula=observable_formula
+                )
+
+    def add_parameter_row(self):
+        dialog = ParameterInputDialog(self.view)
+        if dialog.exec():
+            parameter_id, nominal_value = dialog.get_inputs()
+            if parameter_id:
+                self.models[2].add_row_with_defaults(
+                    parameterId=parameter_id,
+                    nominalValue=nominal_value
+                )
+
+    def add_condition_row(self):
+        condition_id, ok = QInputDialog.getText(self.view, "Add Condition",
+                                                "Condition ID:")
+        if ok and condition_id:
+            condition_columns = self.models[3]._data_frame.columns.tolist()
+            condition_columns.remove("conditionName")
+            if len(condition_columns) > 1:
+                self.prompt_condition_details(condition_id, condition_columns)
+            else:
+                self.models[3].add_row_with_defaults(
+                    conditionId=condition_id,
+                    conditionName=condition_id
+                )
+
+    def add_column(self, table_index):
+        column_name, ok = QInputDialog.getText(self.view, "Add Column", "Column name:")
+        if ok and column_name:
+            self.add_column_to_model(table_index, column_name)
+
+    def add_column_to_model(self, table_index, column_name):
+        allowed_columns = self.allowed_columns[table_index]
+        if column_name in allowed_columns:
+            column_type = allowed_columns[column_name]
+            default_value = "" if column_type == "STRING" else 0
+            self.models[table_index].add_column(column_name, default_value)
+        else:
+            QMessageBox.warning(self.view, "Invalid Column", f"The column '{column_name}' is not allowed for this table.")
+
+    def handle_observable_id_change(self, old_id, new_id):
+        reply = QMessageBox.question(
+            self.view, 'Rename Observable',
+            f'Do you want to rename observable "{old_id}" to "{new_id}" in all measurements?',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.rename_observable_in_measurements(old_id, new_id)
+
+    def rename_observable_in_measurements(self, old_id, new_id):
+        measurement_model = self.models[0]
+        rows = measurement_model._data_frame.shape[0]
+        for row in range(rows):
+            if measurement_model._data_frame.at[row, "observableId"] == old_id:
+                measurement_model._data_frame.at[row, "observableId"] = new_id
+        measurement_model.layoutChanged.emit()
+
+    def delete_row(self, table_index):
+        table_view = self.view.tables[table_index]
+        model = self.models[table_index]
+        selection_model = table_view.selectionModel()
+        selected_indexes = selection_model.selectedRows()
+
+        if not selected_indexes:
+            return
+
+        for index in sorted(selected_indexes):
+            model._data_frame.drop(index.row(), inplace=True)
+        model.layoutChanged.emit()
+
+    # def find_text(self, text):
+    #     for model in self.models:
+    #         matching_cells = model._data_frame.map(
+    #             lambda x: text in str(x))
+    #         matching_indices = matching_cells.stack().index[
+    #             matching_cells.stack()]
+    #         if not matching_indices.empty:
+    #             for row, col in matching_indices:
+    #                 print(f"Found '{text}' in row {row}, column {col}")
+
+    def replace_text(self, find_text, replace_text):
+        for model in self.models:
+            model._data_frame.replace(find_text, replace_text, inplace=True)
+            model.layoutChanged.emit()
+
+    def finish_editing(self):
+        print("Finish editing clicked")
+        # Implement what happens when finishing editing
+
