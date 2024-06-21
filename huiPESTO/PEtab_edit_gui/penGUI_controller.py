@@ -119,11 +119,10 @@ class Controller:
             self.models[table_index].add_row()
 
     def add_measurement_row(self):
-        # conditionId is the index of models[3]
-        condition_ids = self.models[3]._data_frame.index.tolist()
-        observable_ids = self.models[1]._data_frame.index.tolist()
-        dialog = MeasurementInputDialog(condition_ids, observable_ids,
-                                        self.view)
+        condition_ids = self.models[3]._data_frame["conditionId"].tolist()
+        observable_ids = self.models[1]._data_frame["observableId"].tolist()
+        dialog = MeasurementInputDialog(
+            condition_ids, observable_ids, parent=self.view)
         if dialog.exec():
             observable_id, measurement, timepoints, condition_id = dialog.get_inputs()
             self.process_measurement_inputs(observable_id, measurement,
@@ -132,20 +131,21 @@ class Controller:
     def process_measurement_inputs(self, observable_id, measurement,
                                    timepoints, condition_id):
         if observable_id and measurement and timepoints:
-            self.add_observable_if_missing(observable_id)
-            self.add_condition_if_missing(condition_id)
             noise_parameters = self.copy_noise_parameters(observable_id,
                                                           condition_id)
-            self.models[0].add_row_with_defaults(
+            success = self.models[0].add_row_with_defaults(
                 observableId=observable_id,
                 measurement=measurement,
                 time=timepoints,
                 simulationConditionId=condition_id,
                 noiseParameters=noise_parameters
             )
+            if success:
+                self.add_observable_if_missing(observable_id)
+                self.add_condition_if_missing(condition_id)
 
     def add_observable_if_missing(self, observable_id):
-        if observable_id not in self.models[1]._data_frame.index.tolist():
+        if observable_id not in self.models[1]._data_frame["observableId"].values:
             formula_dialog = ObservableFormulaInputDialog(observable_id,
                                                           self.view)
             if formula_dialog.exec():
@@ -157,7 +157,7 @@ class Controller:
 
     def add_condition_if_missing(self, condition_id):
         if condition_id and condition_id \
-                not in self.models[3]._data_frame.index.tolist():
+                not in self.models[3]._data_frame["conditionId"].values:
             condition_columns = self.models[3]._data_frame.columns.tolist()
             condition_columns.remove("conditionName")
             if len(condition_columns) > 1:
@@ -190,7 +190,7 @@ class Controller:
         return noise_parameters
 
     def add_observable_row(self):
-        dialog = ObservableInputDialog(self.view)
+        dialog = ObservableInputDialog(parent=self.view)
         if dialog.exec():
             observable_id, observable_formula = dialog.get_inputs()
             if observable_id and observable_formula:
@@ -200,7 +200,7 @@ class Controller:
                 )
 
     def add_parameter_row(self):
-        dialog = ParameterInputDialog(self.view)
+        dialog = ParameterInputDialog(parent=self.view)
         if dialog.exec():
             parameter_id, nominal_value = dialog.get_inputs()
             if parameter_id:

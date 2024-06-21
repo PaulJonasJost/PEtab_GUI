@@ -1,11 +1,14 @@
 import pandas as pd
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, QObject
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, \
+    QObject
+from PySide6.QtWidgets import QMessageBox
 from PySide6.QtGui import QColor
 import petab
 import tellurium as te
 import libsbml
 
-from utils import set_dtypes
+from utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
+    ParameterInputDialog, ConditionInputDialog
 
 
 class PandasTableModel(QAbstractTableModel):
@@ -70,19 +73,8 @@ class PandasTableModel(QAbstractTableModel):
                 self._data_frame.iloc[index.row(), index.column()] = value
                 self.dataChanged.emit(index, index, [Qt.DisplayRole])
 
-            # Perform plausibility check on the row
-            row_data = self._data_frame.iloc[index.row()]
-            row_data = set_dtypes(row_data.to_frame().T, self._allowed_columns)
-            error_message = None
-            try:
-                self.check_petab_lint(row_data)
-            except Exception as e:
-                error_message = e
-            if error_message:
-                self._invalid_rows.add(index.row())
-            else:
-                self._invalid_rows.discard(index.row())
-            self.dataChanged.emit(index, index, [Qt.BackgroundRole])
+            # Validate the row after setting data
+            self.validate_row(index.row())
 
             # Emit rowChanged signal if the table type is measurement
             if self.table_type == "measurement":
@@ -90,6 +82,20 @@ class PandasTableModel(QAbstractTableModel):
 
             return True
         return False
+
+    def validate_row(self, row_index):
+        row_data = self._data_frame.iloc[row_index]
+        row_data = set_dtypes(row_data.to_frame().T, self._allowed_columns)
+        error_message = None
+        try:
+            self.check_petab_lint(row_data)
+        except Exception as e:
+            error_message = e
+        if error_message:
+            self._invalid_rows.add(row_index)
+        else:
+            self._invalid_rows.discard(row_index)
+        self.dataChanged.emit(self.index(row_index, 0), self.index(row_index, self.columnCount() - 1), [Qt.BackgroundRole])
 
     def flags(self, index):
         if not index.isValid():
@@ -111,23 +117,35 @@ class PandasTableModel(QAbstractTableModel):
 
     def add_row_with_defaults(self, **kwargs):
         new_index = len(self._data_frame)
-        if self.table_type == "observable":
-            new_index = kwargs.get("observableId")
-        if self.table_type == "parameter":
-            new_index = kwargs.get("parameterId")
-        if self.table_type == "condition":
-            new_index = kwargs.get("conditionId")
-        if new_index in self._data_frame.index:
-            return
         self._data_frame.loc[new_index] = ""
 
         for key, value in kwargs.items():
             if key in self._data_frame.columns:
-                # TODO: typechecks
+                # check that the value is of the correct type
+                expected_type = self._allowed_columns.get(key)
+                if expected_type:
+                    try:
+                        if expected_type == "STRING":
+                            value = str(value)
+                        elif expected_type == "NUMERIC":
+                            value = float(value)
+                        elif expected_type == "BOOLEAN":
+                            value = bool(value)
+                    except ValueError:
+                        # show a warning and delete the new row
+                        error_message = f"Column '{key}' expects a value of type {expected_type}, but got '{value}'"
+                        QMessageBox.warning(None, "Input Error", error_message)
+
+                        # Open the appropriate dialog with values prefilled
+                        self.open_dialog_with_values(kwargs, key)
+
+                        self._data_frame.drop(index=new_index, inplace=True)
+                        self.layoutChanged.emit()
+                        return False
                 self._data_frame.loc[new_index, key] = value
 
         # Adding specific defaults based on the type of table
-        if self.table_type == "measurement":
+        if self.table_type == "observable":
             if "noiseFormula" in self._data_frame.columns:
                 self._data_frame.loc[new_index, "noiseFormula"] = f"noiseParameter1_{kwargs.get('observableId')}"
             if "observableTransformation" in self._data_frame.columns:
@@ -149,7 +167,21 @@ class PandasTableModel(QAbstractTableModel):
             if "estimate" in self._data_frame.columns:
                 self._data_frame.loc[new_index, "estimate"] = 1
 
+        # run a check on the row
+        row_data = self._data_frame.loc[new_index]
+        row_data = set_dtypes(row_data.to_frame().T, self._allowed_columns)
+        error_message = None
+        try:
+            self.check_petab_lint(row_data)
+        except Exception as e:
+            error_message = e
+        if error_message:
+            self._invalid_rows.add(new_index)
+        else:
+            self._invalid_rows.discard(new_index)
         self.layoutChanged.emit()
+        # validate the row
+        self.validate_row(new_index)
 
     def check_petab_lint(self, row_data):
         # Implement the actual check logic based on the table type
@@ -169,6 +201,21 @@ class PandasTableModel(QAbstractTableModel):
     def add_column(self, column_name, default_value):
         self._data_frame[column_name] = default_value
         self.layoutChanged.emit()
+
+    def open_dialog_with_values(self, values, error_key):
+        if self.table_type == "measurement":
+            dialog = MeasurementInputDialog(
+                initial_values=values, error_key=error_key
+            )
+        elif self.table_type == "observable":
+            dialog = ObservableInputDialog(values, error_key)
+        elif self.table_type == "parameter":
+            dialog = ParameterInputDialog(values, error_key)
+        elif self.table_type == "condition":
+            dialog = ConditionInputDialog(values, error_key)
+        else:
+            return
+        dialog.exec()
 
 
 class SbmlViewerModel(QObject):

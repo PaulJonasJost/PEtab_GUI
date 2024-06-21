@@ -5,7 +5,7 @@ import re
 
 
 class ConditionInputDialog(QDialog):
-    def __init__(self, condition_id, condition_columns, parent=None):
+    def __init__(self, condition_id, condition_columns, initial_values=None, error_key=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Add Condition")
 
@@ -28,6 +28,10 @@ class ConditionInputDialog(QDialog):
                 field_layout = QHBoxLayout()
                 field_label = QLabel(f"{column}:", self)
                 field_input = QLineEdit(self)
+                if initial_values and column in initial_values:
+                    field_input.setText(str(initial_values[column]))
+                    if column == error_key:
+                        field_input.setStyleSheet("background-color: red;")
                 field_layout.addWidget(field_label)
                 field_layout.addWidget(field_input)
                 self.layout.addLayout(field_layout)
@@ -52,7 +56,14 @@ class ConditionInputDialog(QDialog):
 
 
 class MeasurementInputDialog(QDialog):
-    def __init__(self, condition_ids, observable_ids, parent=None):
+    def __init__(
+        self,
+        condition_ids = None,
+        observable_ids = None,
+        initial_values=None,
+        error_key=None,
+        parent=None
+    ):
         super().__init__(parent)
         self.setWindowTitle("Add Measurement")
 
@@ -62,18 +73,27 @@ class MeasurementInputDialog(QDialog):
         self.observable_id_layout = QHBoxLayout()
         self.observable_id_label = QLabel("Observable ID:", self)
         self.observable_id_input = QLineEdit(self)
+        if initial_values and "observableId" in initial_values:
+            self.observable_id_input.setText(str(initial_values["observableId"]))
+            if "observableId" == error_key:
+                self.observable_id_input.setStyleSheet("background-color: red;")
         self.observable_id_layout.addWidget(self.observable_id_label)
         self.observable_id_layout.addWidget(self.observable_id_input)
         self.layout.addLayout(self.observable_id_layout)
 
-        # Auto-suggestion for Observable ID
-        observable_completer = QCompleter(observable_ids, self)
-        self.observable_id_input.setCompleter(observable_completer)
+        if observable_ids:
+            # Auto-suggestion for Observable ID
+            observable_completer = QCompleter(observable_ids, self)
+            self.observable_id_input.setCompleter(observable_completer)
 
         # Measurement
         self.measurement_layout = QHBoxLayout()
         self.measurement_label = QLabel("Measurement:", self)
         self.measurement_input = QLineEdit(self)
+        if initial_values and "measurement" in initial_values:
+            self.measurement_input.setText(str(initial_values["measurement"]))
+            if "measurement" == error_key:
+                self.measurement_input.setStyleSheet("background-color: red;")
         self.measurement_layout.addWidget(self.measurement_label)
         self.measurement_layout.addWidget(self.measurement_input)
         self.layout.addLayout(self.measurement_layout)
@@ -82,6 +102,10 @@ class MeasurementInputDialog(QDialog):
         self.timepoints_layout = QHBoxLayout()
         self.timepoints_label = QLabel("Timepoints:", self)
         self.timepoints_input = QLineEdit(self)
+        if initial_values and "time" in initial_values:
+            self.timepoints_input.setText(str(initial_values["time"]))
+            if "time" == error_key:
+                self.timepoints_input.setStyleSheet("background-color: red;")
         self.timepoints_layout.addWidget(self.timepoints_label)
         self.timepoints_layout.addWidget(self.timepoints_input)
         self.layout.addLayout(self.timepoints_layout)
@@ -90,15 +114,20 @@ class MeasurementInputDialog(QDialog):
         self.condition_id_layout = QHBoxLayout()
         self.condition_id_label = QLabel("Condition ID:", self)
         self.condition_id_input = QLineEdit(self)
-        if len(condition_ids) == 1:
+        if initial_values and "conditionId" in initial_values:
+            self.condition_id_input.setText(str(initial_values["conditionId"]))
+            if "conditionId" == error_key:
+                self.condition_id_input.setStyleSheet("background-color: red;")
+        elif condition_ids and len(condition_ids) == 1:
             self.condition_id_input.setText(condition_ids[0])
         self.condition_id_layout.addWidget(self.condition_id_label)
         self.condition_id_layout.addWidget(self.condition_id_input)
         self.layout.addLayout(self.condition_id_layout)
 
-        # Auto-suggestion for Condition ID
-        condition_completer = QCompleter(condition_ids, self)
-        self.condition_id_input.setCompleter(condition_completer)
+        if condition_ids:
+            # Auto-suggestion for Condition ID
+            condition_completer = QCompleter(condition_ids, self)
+            self.condition_id_input.setCompleter(condition_completer)
 
         # Buttons
         self.buttons_layout = QHBoxLayout()
@@ -119,7 +148,7 @@ class MeasurementInputDialog(QDialog):
 
 
 class ObservableInputDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_values=None, error_key=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Add Observable")
 
@@ -129,6 +158,10 @@ class ObservableInputDialog(QDialog):
         self.observable_id_layout = QHBoxLayout()
         self.observable_id_label = QLabel("Observable ID:", self)
         self.observable_id_input = QLineEdit(self)
+        if initial_values and "observableId" in initial_values:
+            self.observable_id_input.setText(str(initial_values["observableId"]))
+            if "observableId" == error_key:
+                self.observable_id_input.setStyleSheet("background-color: red;")
         self.observable_id_layout.addWidget(self.observable_id_label)
         self.observable_id_layout.addWidget(self.observable_id_input)
         self.layout.addLayout(self.observable_id_layout)
@@ -137,6 +170,10 @@ class ObservableInputDialog(QDialog):
         self.observable_formula_layout = QHBoxLayout()
         self.observable_formula_label = QLabel("Observable Formula:", self)
         self.observable_formula_input = QLineEdit(self)
+        if initial_values and "observableFormula" in initial_values:
+            self.observable_formula_input.setText(str(initial_values["observableFormula"]))
+            if "observableFormula" == error_key:
+                self.observable_formula_input.setStyleSheet("background-color: red;")
         self.observable_formula_layout.addWidget(self.observable_formula_label)
         self.observable_formula_layout.addWidget(self.observable_formula_input)
         self.layout.addLayout(self.observable_formula_layout)
@@ -200,7 +237,7 @@ class ObservableFormulaInputDialog(QDialog):
 
 
 class ParameterInputDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_values=None, error_key=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Add Parameter")
 
@@ -210,6 +247,10 @@ class ParameterInputDialog(QDialog):
         self.parameter_id_layout = QHBoxLayout()
         self.parameter_id_label = QLabel("Parameter ID:", self)
         self.parameter_id_input = QLineEdit(self)
+        if initial_values and "parameterId" in initial_values:
+            self.parameter_id_input.setText(str(initial_values["parameterId"]))
+            if "parameterId" == error_key:
+                self.parameter_id_input.setStyleSheet("background-color: red;")
         self.parameter_id_layout.addWidget(self.parameter_id_label)
         self.parameter_id_layout.addWidget(self.parameter_id_input)
         self.layout.addLayout(self.parameter_id_layout)
@@ -218,6 +259,10 @@ class ParameterInputDialog(QDialog):
         self.nominal_value_layout = QHBoxLayout()
         self.nominal_value_label = QLabel("Nominal Value (optional):", self)
         self.nominal_value_input = QLineEdit(self)
+        if initial_values and "nominalValue" in initial_values:
+            self.nominal_value_input.setText(str(initial_values["nominalValue"]))
+            if "nominalValue" == error_key:
+                self.nominal_value_input.setStyleSheet("background-color: red;")
         self.nominal_value_layout.addWidget(self.nominal_value_label)
         self.nominal_value_layout.addWidget(self.nominal_value_input)
         self.layout.addLayout(self.nominal_value_layout)
