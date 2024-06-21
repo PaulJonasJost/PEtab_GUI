@@ -156,10 +156,13 @@ class PandasTableModel(QAbstractTableModel):
         if self.table_type == "measurement":
             return petab.check_measurement_df(row_data)
         elif self.table_type == "observable":
+            row_data = row_data.set_index("observableId")
             return petab.check_observable_df(row_data)
         elif self.table_type == "parameter":
+            row_data = row_data.set_index("parameterId")
             return petab.check_parameter_df(row_data)
         elif self.table_type == "condition":
+            row_data = row_data.set_index("conditionId")
             return petab.check_condition_df(row_data)
         return True
 

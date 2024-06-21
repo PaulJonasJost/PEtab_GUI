@@ -13,9 +13,9 @@ class Controller:
 
         _data_frames = [
             set_dtypes(data_frames[0].fillna(""), MEASUREMENT_COLUMNS),
-            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS, "observableId"),
-            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS, "parameterId"),
-            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS, "conditionId")
+            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS),
+            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS),
+            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS)
         ]
 
         self.models = [
