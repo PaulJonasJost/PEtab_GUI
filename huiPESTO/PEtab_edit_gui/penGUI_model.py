@@ -8,7 +8,7 @@ import tellurium as te
 import libsbml
 
 from utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
-    ParameterInputDialog, ConditionInputDialog
+    ParameterInputDialog, ConditionInputDialog, validate_value
 
 
 class PandasTableModel(QAbstractTableModel):
@@ -61,14 +61,8 @@ class PandasTableModel(QAbstractTableModel):
             else:
                 expected_type = self._allowed_columns.get(column_name)
                 if expected_type:
-                    try:
-                        if expected_type == "STRING":
-                            value = str(value)
-                        elif expected_type == "NUMERIC":
-                            value = float(value)
-                        elif expected_type == "BOOLEAN":
-                            value = bool(value)
-                    except ValueError:
+                    value, error_message = validate_value(value, expected_type)
+                    if error_message:
                         return False
                 self._data_frame.iloc[index.row(), index.column()] = value
                 self.dataChanged.emit(index, index, [Qt.DisplayRole])
@@ -124,14 +118,8 @@ class PandasTableModel(QAbstractTableModel):
                 # check that the value is of the correct type
                 expected_type = self._allowed_columns.get(key)
                 if expected_type:
-                    try:
-                        if expected_type == "STRING":
-                            value = str(value)
-                        elif expected_type == "NUMERIC":
-                            value = float(value)
-                        elif expected_type == "BOOLEAN":
-                            value = bool(value)
-                    except ValueError:
+                    value, error_message = validate_value(value, expected_type)
+                    if error_message:
                         # show a warning and delete the new row
                         error_message = f"Column '{key}' expects a value of type {expected_type}, but got '{value}'"
                         QMessageBox.warning(None, "Input Error", error_message)
@@ -182,6 +170,7 @@ class PandasTableModel(QAbstractTableModel):
         self.layoutChanged.emit()
         # validate the row
         self.validate_row(new_index)
+        return True
 
     def check_petab_lint(self, row_data):
         # Implement the actual check logic based on the table type

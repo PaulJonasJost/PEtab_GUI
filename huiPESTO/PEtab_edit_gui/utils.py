@@ -1,7 +1,9 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, \
-    QLineEdit, QPushButton, QCompleter
+    QLineEdit, QPushButton, QCompleter, QWidget
 from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor
 import re
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 
 class ConditionInputDialog(QDialog):
@@ -357,3 +359,23 @@ class SyntaxHighlighter(QSyntaxHighlighter):
             for match in pattern.finditer(text):
                 self.setFormat(match.start(), match.end() - match.start(), format)
 
+
+def validate_value(value, expected_type):
+    try:
+        if expected_type == "STRING":
+            value = str(value)
+        elif expected_type == "NUMERIC":
+            value = float(value)
+        elif expected_type == "BOOLEAN":
+            value = bool(value)
+    except ValueError as e:
+        return None, str(e)
+    return value, None
+
+
+class PlotWidget(FigureCanvas):
+
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+        super(PlotWidget, self).__init__(fig)

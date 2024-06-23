@@ -1,13 +1,15 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
-    QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel
+    QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
+    QStackedWidget, QToolButton, QStyle
 import PySide6.QtWidgets as widgets
 from PySide6.QtCore import Qt, QModelIndex
 from PySide6.QtGui import QAction, QShortcut, QKeySequence
 import sys
 from C import CONFIG
-from utils import FindReplaceDialog, SyntaxHighlighter
+from utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
 from penGUI_model import SbmlViewerModel
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 
 class MainWindow(QMainWindow):
@@ -55,31 +57,69 @@ class MainWindow(QMainWindow):
     def setup_petable_tab(self):
         layout = QVBoxLayout(self.petable_tab)
 
-        self.grid_layout = QGridLayout()
+        self.grid_layout = QGridLayout()  # Use QGridLayout for 2x2 grid
+        layout.addLayout(self.grid_layout)
+
         self.tables = []
         self.add_row_buttons = []
         self.add_column_buttons = []
+        self.stacked_widgets = []
 
-        for i in range(4):
+        for i in range(3):
             self.create_table_frame(i)
 
-        layout.addLayout(self.grid_layout)
+        self.create_table_frame(3, "Condition Table", include_stacked_widget=True)
 
-    def create_table_frame(self, index):
+        # Set stretch factors for equal space allocation
+        for i in range(2):
+            self.grid_layout.setRowStretch(i, 1)
+            self.grid_layout.setColumnStretch(i, 1)
+
+    def create_table_frame(self, index, label_text="", include_stacked_widget=False):
         frame = QFrame()
         frame_layout = QVBoxLayout(frame)
 
-        # Add the header label
         table_labels = ["Measurement Table", "Observable Table", "Parameter Table", "Condition Table"]
-        label = QLabel(table_labels[index])
-        frame_layout.addWidget(label)
+
+        # Label and button layout
+        label_layout = QHBoxLayout()
+        label_layout.setContentsMargins(0, 0, 0, 0)
+        label = QLabel(label_text if label_text else table_labels[index])
+        label_layout.addWidget(label)
+
+        if include_stacked_widget:
+            toggle_button = QToolButton()
+            toggle_button.setIcon(self.style().standardIcon(getattr(QStyle, 'SP_DialogResetButton')))
+            toggle_button.setStyleSheet("QToolButton { padding: 0px; margin: 0px; }")  # Remove padding and margin
+            toggle_button.clicked.connect(lambda: self.toggle_view(stacked_widget, label, toggle_button))
+            label_layout.addWidget(toggle_button)
+
+        frame_layout.addLayout(label_layout)
 
         table_view = QTableView()
         table_view.setSortingEnabled(True)
         table_view.setContextMenuPolicy(Qt.CustomContextMenu)
         table_view.customContextMenuRequested.connect(lambda pos, x=index: self.show_context_menu(pos, x))
         self.tables.append(table_view)
-        frame_layout.addWidget(table_view)
+
+        if include_stacked_widget:
+            stacked_widget = QStackedWidget()
+            stacked_widget.addWidget(table_view)
+
+            plot_frame = QFrame()
+
+            plot_widget = PlotWidget()
+            toolbar = NavigationToolbar2QT(plot_widget, self)
+            plot_layout = QVBoxLayout()
+            plot_layout.addWidget(toolbar)
+            plot_layout.addWidget(plot_widget)
+            plot_frame.setLayout(plot_layout)
+            stacked_widget.addWidget(plot_frame)
+
+            frame_layout.addWidget(stacked_widget)
+            self.stacked_widgets.append(stacked_widget)
+        else:
+            frame_layout.addWidget(table_view)
 
         button_layout = QHBoxLayout()
         add_row_button = QPushButton("Add Row")
@@ -90,7 +130,25 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(add_column_button)
 
         frame_layout.addLayout(button_layout)
-        self.grid_layout.addWidget(frame, index // 2, index % 2)
+
+        # Add frame to the grid layout
+        row = index // 2
+        col = index % 2
+        self.grid_layout.addWidget(frame, row, col)
+
+        return frame
+
+    def toggle_view(self, stacked_widget, label, toggle_button):
+        current_index = stacked_widget.currentIndex()
+        new_index = 1 if current_index == 0 else 0
+        stacked_widget.setCurrentIndex(new_index)
+
+        if new_index == 1:
+            label.setText("Data Plot")
+            toggle_button.setIcon(self.style().standardIcon(getattr(QStyle, 'SP_FileDialogContentsView')))
+        else:
+            label.setText("Condition Table")
+            toggle_button.setIcon(self.style().standardIcon(getattr(QStyle, 'SP_DialogResetButton')))
 
     def show_context_menu(self, pos, table_index):
         table_view = self.tables[table_index]
