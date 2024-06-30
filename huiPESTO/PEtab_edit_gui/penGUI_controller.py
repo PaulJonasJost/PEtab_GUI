@@ -336,6 +336,17 @@ class Controller:
             with open(file_name, 'wb') as f:
                 f.write(buffer.getvalue())
 
-            QMessageBox.information(self.view, "Save Project",
-                                    f"Project saved successfully to {file_name}")
+            QMessageBox.information(
+                self.view, "Save Project",
+                f"Project saved successfully to {file_name}"
+            )
 
+            # Ask if the user wants to close the application
+            reply = QMessageBox.question(
+                self.view, "Close Application",
+                "Do you want to close the application?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.view.close()
