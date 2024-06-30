@@ -155,21 +155,9 @@ class PandasTableModel(QAbstractTableModel):
             if "estimate" in self._data_frame.columns:
                 self._data_frame.loc[new_index, "estimate"] = 1
 
-        # run a check on the row
-        row_data = self._data_frame.loc[new_index]
-        row_data = set_dtypes(row_data.to_frame().T, self._allowed_columns)
-        error_message = None
-        try:
-            self.check_petab_lint(row_data)
-        except Exception as e:
-            error_message = e
-        if error_message:
-            self._invalid_rows.add(new_index)
-        else:
-            self._invalid_rows.discard(new_index)
-        self.layoutChanged.emit()
         # validate the row
         self.validate_row(new_index)
+        self.layoutChanged.emit()
         return True
 
     def check_petab_lint(self, row_data):

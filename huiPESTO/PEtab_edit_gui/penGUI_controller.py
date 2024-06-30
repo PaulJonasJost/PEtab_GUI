@@ -1,5 +1,7 @@
 from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
 import pandas as pd
+import zipfile
+from io import BytesIO
 from C import *
 from utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
@@ -307,6 +309,33 @@ class Controller:
             model.layoutChanged.emit()
 
     def finish_editing(self):
-        print("Finish editing clicked")
-        # Implement what happens when finishing editing
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self.view,
+                                                   "Save Project",
+                                                   "",
+                                                   "Zip Files (*.zip)",
+                                                   options=options)
+        if file_name:
+            if not file_name.endswith(".zip"):
+                file_name += ".zip"
+
+            # Create a bytes buffer to hold the zip file in memory
+            buffer = BytesIO()
+            with zipfile.ZipFile(buffer, 'w') as zip_file:
+                # Save each data frame to a CSV file in the zip archive
+                for i, model in enumerate(self.models):
+                    table_name = list(self.allowed_columns.keys())[i]
+                    csv_data = model._data_frame.to_csv(index=False)
+                    zip_file.writestr(f"{model.table_type}.csv", csv_data)
+
+                # Save the SBML model to a file in the zip archive
+                sbml_data = self.sbml_model.sbml_text
+                zip_file.writestr("model.xml", sbml_data)
+
+            # Write the buffer contents to the file
+            with open(file_name, 'wb') as f:
+                f.write(buffer.getvalue())
+
+            QMessageBox.information(self.view, "Save Project",
+                                    f"Project saved successfully to {file_name}")
 
