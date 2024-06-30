@@ -57,7 +57,8 @@ class MainWindow(QMainWindow):
     def setup_petable_tab(self):
         layout = QVBoxLayout(self.petable_tab)
 
-        self.grid_layout = QGridLayout()  # Use QGridLayout for 2x2 grid
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setSpacing(0)
         layout.addLayout(self.grid_layout)
 
         self.tables = []
@@ -102,25 +103,6 @@ class MainWindow(QMainWindow):
         table_view.customContextMenuRequested.connect(lambda pos, x=index: self.show_context_menu(pos, x))
         self.tables.append(table_view)
 
-        if include_stacked_widget:
-            stacked_widget = QStackedWidget()
-            stacked_widget.addWidget(table_view)
-
-            plot_frame = QFrame()
-
-            plot_widget = PlotWidget()
-            toolbar = NavigationToolbar2QT(plot_widget, self)
-            plot_layout = QVBoxLayout()
-            plot_layout.addWidget(toolbar)
-            plot_layout.addWidget(plot_widget)
-            plot_frame.setLayout(plot_layout)
-            stacked_widget.addWidget(plot_frame)
-
-            frame_layout.addWidget(stacked_widget)
-            self.stacked_widgets.append(stacked_widget)
-        else:
-            frame_layout.addWidget(table_view)
-
         button_layout = QHBoxLayout()
         add_row_button = QPushButton("Add Row")
         add_column_button = QPushButton("Add Column")
@@ -129,7 +111,31 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(add_row_button)
         button_layout.addWidget(add_column_button)
 
-        frame_layout.addLayout(button_layout)
+        if include_stacked_widget:
+            stacked_widget = QStackedWidget()
+            table_frame = QFrame()
+            table_frame.setFrameShape(QFrame.NoFrame)
+            table_frame.setContentsMargins(0, 0, 0, 0)
+            table_frame_layout = QVBoxLayout(table_frame)
+            table_frame_layout.addWidget(table_view)
+            table_frame_layout.addLayout(button_layout)
+            stacked_widget.addWidget(table_frame)
+
+            plot_frame = QFrame()
+
+            self.plot_widget = PlotWidget()
+            toolbar = NavigationToolbar2QT(self.plot_widget, self)
+            plot_layout = QVBoxLayout()
+            plot_layout.addWidget(toolbar)
+            plot_layout.addWidget(self.plot_widget)
+            plot_frame.setLayout(plot_layout)
+            stacked_widget.addWidget(plot_frame)
+
+            frame_layout.addWidget(stacked_widget)
+            self.stacked_widgets.append(stacked_widget)
+        else:
+            frame_layout.addWidget(table_view)
+            frame_layout.addLayout(button_layout)
 
         # Add frame to the grid layout
         row = index // 2
@@ -137,6 +143,16 @@ class MainWindow(QMainWindow):
         self.grid_layout.addWidget(frame, row, col)
 
         return frame
+
+    def update_visualization(self, plot_data=None):
+        self.plot_widget.axes.cla()
+        self.plot_widget.axes.plot(plot_data["x"], plot_data["y"], 'go')
+        self.plot_widget.axes.plot(
+            plot_data["selected_point"]["x"],
+            plot_data["selected_point"]["y"],
+            'o', color='orange'
+        )
+        self.plot_widget.draw()
 
     def toggle_view(self, stacked_widget, label, toggle_button):
         current_index = stacked_widget.currentIndex()

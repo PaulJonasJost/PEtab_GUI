@@ -49,6 +49,9 @@ class Controller:
         self.view.finish_button.clicked.connect(self.finish_editing)
         self.view.upload_data_matrix_button.clicked.connect(self.upload_data_matrix)
         self.models[1].observable_id_changed.connect(self.handle_observable_id_change)
+        self.view.tables[0].selectionModel().selectionChanged.connect(
+            self.handle_selection_changed
+        )
 
     def upload_data_matrix(self):
         file_name, _ = QFileDialog.getOpenFileName(self.view, "Open Data Matrix", "", "CSV Files (*.csv);;TSV Files (*.tsv)")
@@ -266,6 +269,27 @@ class Controller:
         for index in sorted(selected_indexes):
             model._data_frame.drop(index.row(), inplace=True)
         model.layoutChanged.emit()
+
+    def handle_selection_changed(self, selected, deselected):
+        indexes = selected.indexes()
+        if indexes:
+            row = indexes[0].row()
+            observable_id = self.models[0]._data_frame.iloc[row]["observableId"]
+            selected_point = {
+                "x": self.models[0]._data_frame.iloc[row]["time"],
+                "y": self.models[0]._data_frame.iloc[row]["measurement"]
+            }
+            self.update_plot(observable_id, selected_point)
+
+    def update_plot(self, observable_id, selected_point):
+        measurement_data = self.models[0]._data_frame
+        observable_data = measurement_data[measurement_data["observableId"] == observable_id]
+        plot_data = {
+            "x": observable_data["time"].tolist(),
+            "y": observable_data["measurement"].tolist(),
+            "selected_point": selected_point
+        }
+        self.view.update_visualization(plot_data)
 
     # def find_text(self, text):
     #     for model in self.models:
