@@ -1,6 +1,8 @@
 from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
 import pandas as pd
 import zipfile
+import tellurium as te
+import libsbml
 from io import BytesIO
 from C import *
 from utils import ParameterInputDialog, ObservableInputDialog, \
@@ -50,6 +52,7 @@ class Controller:
 
         self.view.finish_button.clicked.connect(self.finish_editing)
         self.view.upload_data_matrix_button.clicked.connect(self.upload_data_matrix)
+        self.view.reset_to_original_button.clicked.connect(self.reset_to_original_model)
         self.models[1].observable_id_changed.connect(self.handle_observable_id_change)
         self.view.tables[0].selectionModel().selectionChanged.connect(
             self.handle_selection_changed
@@ -368,3 +371,11 @@ class Controller:
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
         self.sbml_model.convert_antimony_to_sbml()
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
+
+    def reset_to_original_model(self):
+        self.sbml_model.sbml_text = libsbml.writeSBMLToString(
+            self.sbml_model._sbml_model_original.sbml_model.getSBMLDocument()
+        )
+        self.sbml_model.antimony_text = te.sbmlToAntimony(self.sbml_model.sbml_text)
+        self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
+        self.view.antimony_text_edit.setPlainText(self.sbml_model.antimony_text)

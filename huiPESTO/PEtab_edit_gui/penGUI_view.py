@@ -44,15 +44,28 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.petable_tab, "PEtab Tables")
         self.tabs.addTab(self.sbml_tab, "SBML Model")
 
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+
         self.setup_petable_tab()
         self.setup_sbml_tab()
 
     def init_buttons(self):
         self.upload_data_matrix_button = QPushButton("Upload Data Matrix")
+        self.reset_to_original_button = QPushButton("Reset to Original Model")
         self.finish_button = QPushButton("Finish Editing")
+        self.reset_to_original_button.hide()
 
         self.main_layout.addWidget(self.upload_data_matrix_button)
+        self.main_layout.addWidget(self.reset_to_original_button)
         self.main_layout.addWidget(self.finish_button)
+
+    def on_tab_changed(self, index):
+        if index == 0:  # PEtab Tables tab
+            self.upload_data_matrix_button.show()
+            self.reset_to_original_button.hide()
+        elif index == 1:  # SBML Model tab
+            self.upload_data_matrix_button.hide()
+            self.reset_to_original_button.show()
 
     def setup_petable_tab(self):
         layout = QVBoxLayout(self.petable_tab)
