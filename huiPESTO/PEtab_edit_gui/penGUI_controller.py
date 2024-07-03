@@ -55,6 +55,13 @@ class Controller:
             self.handle_selection_changed
         )
 
+        self.view.forward_sbml_button.clicked.connect(
+            self.update_antimony_from_sbml
+        )
+        self.view.forward_antimony_button.clicked.connect(
+            self.update_sbml_from_antimony
+        )
+
     def upload_data_matrix(self):
         file_name, _ = QFileDialog.getOpenFileName(self.view, "Open Data Matrix", "", "CSV Files (*.csv);;TSV Files (*.tsv)")
         if file_name:
@@ -350,3 +357,14 @@ class Controller:
             )
             if reply == QMessageBox.Yes:
                 self.view.close()
+
+    def update_antimony_from_sbml(self):
+        self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
+        self.sbml_model.convert_sbml_to_antimony()
+        self.view.antimony_text_edit.setPlainText(
+            self.sbml_model.antimony_text)
+
+    def update_sbml_from_antimony(self):
+        self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
+        self.sbml_model.convert_antimony_to_sbml()
+        self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)

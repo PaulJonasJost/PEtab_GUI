@@ -207,16 +207,26 @@ class MainWindow(QMainWindow):
         sbml_label = QLabel("SBML Model")
         sbml_layout.addWidget(sbml_label)
         self.sbml_text_edit = QPlainTextEdit()
-        self.sbml_highlighter = SyntaxHighlighter(self.sbml_text_edit.document())
+        self.sbml_highlighter = SyntaxHighlighter(
+            self.sbml_text_edit.document())
         sbml_layout.addWidget(self.sbml_text_edit)
+
+        # Add forward changes button for SBML
+        self.forward_sbml_button = QPushButton("Forward Changes to Antimony")
+        sbml_layout.addWidget(self.forward_sbml_button)
 
         # Create Antimony model section
         antimony_layout = QVBoxLayout()
         antimony_label = QLabel("Antimony Model")
         antimony_layout.addWidget(antimony_label)
         self.antimony_text_edit = QPlainTextEdit()
-        self.antimony_highlighter = SyntaxHighlighter(self.antimony_text_edit.document())
+        self.antimony_highlighter = SyntaxHighlighter(
+            self.antimony_text_edit.document())
         antimony_layout.addWidget(self.antimony_text_edit)
+
+        # Add forward changes button for Antimony
+        self.forward_antimony_button = QPushButton("Forward Changes to SBML")
+        antimony_layout.addWidget(self.forward_antimony_button)
 
         sbml_widget = QWidget()
         sbml_widget.setLayout(sbml_layout)

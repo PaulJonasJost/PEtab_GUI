@@ -196,42 +196,18 @@ class PandasTableModel(QAbstractTableModel):
 
 
 class SbmlViewerModel(QObject):
-    sbml_updated = Signal(str)
-    antimony_updated = Signal(str)
 
     def __init__(self, sbml_model, parent=None):
         super().__init__(parent)
-        self._sbml_model = sbml_model
+        self._sbml_model_original = sbml_model
 
-        self._sbml_text = libsbml.writeSBMLToString(self._sbml_model.sbml_model.getSBMLDocument())
-        self._antimony_text = te.sbmlToAntimony(self._sbml_text)
-
-    @property
-    def sbml_text(self):
-        return self._sbml_text
-
-    @sbml_text.setter
-    def sbml_text(self, value):
-        if value != self._sbml_text:
-            self._sbml_text = value
-            self.convert_sbml_to_antimony()
-            self.sbml_updated.emit(self._sbml_text)
-
-    @property
-    def antimony_text(self):
-        return self._antimony_text
-
-    @antimony_text.setter
-    def antimony_text(self, value):
-        if value != self._antimony_text:
-            self._antimony_text = value
-            self.convert_antimony_to_sbml()
-            self.antimony_updated.emit(self._antimony_text)
+        self.sbml_text = libsbml.writeSBMLToString(
+            self._sbml_model_original.sbml_model.getSBMLDocument()
+        )
+        self.antimony_text = te.sbmlToAntimony(self.sbml_text)
 
     def convert_sbml_to_antimony(self):
-        # Implement the actual conversion logic here
-        self._antimony_text = f"Converted Antimony from SBML: {self._sbml_text}"
+        self.antimony_text = te.sbmlToAntimony(self.sbml_text)
 
     def convert_antimony_to_sbml(self):
-        # Implement the actual conversion logic here
-        self._sbml_text = f"Converted SBML from Antimony: {self._antimony_text}"
+        self.sbml_text = te.antimonyToSBML(self.antimony_text)
