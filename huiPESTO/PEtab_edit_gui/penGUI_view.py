@@ -92,12 +92,16 @@ class MainWindow(QMainWindow):
     def create_table_frame(self, index, label_text="", include_stacked_widget=False):
         frame = QFrame()
         frame_layout = QVBoxLayout(frame)
+        if include_stacked_widget:
+            frame_layout.setContentsMargins(0, 0, 0, 0)
+        else:    
+            frame_layout.setContentsMargins(9, 9, 9, 9)
 
         table_labels = ["Measurement Table", "Observable Table", "Parameter Table", "Condition Table"]
 
         # Label and button layout
         label_layout = QHBoxLayout()
-        label_layout.setContentsMargins(0, 0, 0, 0)
+        label_layout.setContentsMargins(9 if include_stacked_widget else 0, 0, 0, 0)
         label = QLabel(label_text if label_text else table_labels[index])
         label_layout.addWidget(label)
 
