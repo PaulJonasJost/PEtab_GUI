@@ -4,11 +4,11 @@ import zipfile
 import tellurium as te
 import libsbml
 from io import BytesIO
-from C import *
-from utils import ParameterInputDialog, ObservableInputDialog, \
+from .C import *
+from .utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
     ConditionInputDialog, set_dtypes
-from penGUI_model import PandasTableModel, SbmlViewerModel
+from .penGUI_model import PandasTableModel, SbmlViewerModel
 
 
 class Controller:

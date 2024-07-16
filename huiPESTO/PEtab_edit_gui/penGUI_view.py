@@ -6,9 +6,9 @@ import PySide6.QtWidgets as widgets
 from PySide6.QtCore import Qt, QModelIndex
 from PySide6.QtGui import QAction, QShortcut, QKeySequence
 import sys
-from C import CONFIG
-from utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
-from penGUI_model import SbmlViewerModel
+from .C import CONFIG
+from .utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
+from .penGUI_model import SbmlViewerModel
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 
