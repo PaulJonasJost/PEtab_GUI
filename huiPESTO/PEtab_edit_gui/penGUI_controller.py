@@ -16,19 +16,19 @@ class Controller:
         self.view = view
 
         _data_frames = [
-            set_dtypes(data_frames[0].fillna(""), MEASUREMENT_COLUMNS, self),
-            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS, self),
-            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS, self),
-            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS, self),
+            set_dtypes(data_frames[0].fillna(""), MEASUREMENT_COLUMNS),
+            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS),
+            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS),
+            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS)
         ]
 
         self.models = [
             PandasTableModel(_data_frames[0], MEASUREMENT_COLUMNS,
-                             "measurement"),
+                             "measurement", self),
             PandasTableModel(_data_frames[1], OBSERVABLE_COLUMNS,
-                             "observable"),
-            PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter"),
-            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition")
+                             "observable", self),
+            PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter", self),
+            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition", self),
         ]
         self.sbml_model = SbmlViewerModel(sbml_model=sbml_model)
         # set the text of the SBML and Antimony model

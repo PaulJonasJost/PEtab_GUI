@@ -3,9 +3,10 @@ from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, \
     QObject
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtGui import QColor
-import petab
+import petab.v1 as petab
 import tellurium as te
 import libsbml
+import copy
 
 from utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
     ParameterInputDialog, ConditionInputDialog, validate_value
@@ -19,6 +20,7 @@ class PandasTableModel(QAbstractTableModel):
         self._data_frame = data_frame
         self._allowed_columns = allowed_columns
         self.table_type = table_type
+        self.controller = controller
         self._invalid_rows = set()
 
     def sort(self, column, order):
@@ -69,11 +71,6 @@ class PandasTableModel(QAbstractTableModel):
 
             # Validate the row after setting data
             self.validate_row(index.row())
-
-            # Emit rowChanged signal if the table type is measurement
-            if self.table_type == "measurement":
-                self.rowChanged.emit(index.row())
-
             return True
         return False
 
@@ -165,7 +162,9 @@ class PandasTableModel(QAbstractTableModel):
         if self.table_type == "measurement":
             return petab.check_measurement_df(
                 row_data,
-                observable_df=self.controller.models[1]._data_frame,
+                observable_df=petab.observables.get_observable_df(
+                    copy.deepcopy(self.controller.models[1]._data_frame)
+                ),
             )
         elif self.table_type == "observable":
             row_data = row_data.set_index("observableId")
@@ -174,16 +173,24 @@ class PandasTableModel(QAbstractTableModel):
             row_data = row_data.set_index("parameterId")
             return petab.check_parameter_df(
                 row_data,
-                observable_df=self.controller.models[1]._data_frame,
-                measurement_df=self.controller.models[0]._data_frame,
-                condition_df=self.controller.models[3]._data_frame,
+                observable_df=petab.observables.get_observable_df(
+                    copy.deepcopy(self.controller.models[1]._data_frame)
+                ),
+                measurement_df=petab.measurements.get_measurement_df(
+                    copy.deepcopy(self.controller.models[0]._data_frame)
+                ),
+                condition_df=petab.conditions.get_condition_df(
+                    copy.deepcopy(self.controller.models[3]._data_frame)
+                ),
                 # TODO: add SBML model
             )
         elif self.table_type == "condition":
             row_data = row_data.set_index("conditionId")
             return petab.check_condition_df(
                 row_data,
-                observable_df=self.controller.models[1]._data_frame,
+                observable_df=petab.conditions.get_condition_df(
+                    copy.deepcopy(self.controller.models[3]._data_frame)
+                ),
                 # TODO: add SBML model
             )
         return True
