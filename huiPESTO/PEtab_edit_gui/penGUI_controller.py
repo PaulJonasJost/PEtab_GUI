@@ -313,8 +313,9 @@ class Controller:
     #             for row, col in matching_indices:
     #                 print(f"Found '{text}' in row {row}, column {col}")
 
-    def replace_text(self, find_text, replace_text):
-        for model in self.models:
+    def replace_text(self, find_text, replace_text, selected_models):
+        for index in selected_models:
+            model = self.models[index]
             model._data_frame.replace(find_text, replace_text, inplace=True)
             model.layoutChanged.emit()
 

@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, \
-    QLineEdit, QPushButton, QCompleter, QWidget
+    QLineEdit, QPushButton, QCompleter, QCheckBox, QGridLayout
 from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor
 import re
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -313,7 +313,6 @@ class FindReplaceDialog(QDialog):
         self.replace_button = QPushButton("Replace")
         self.close_button = QPushButton("Close")
 
-        # self.find_button.clicked.connect(self.find)
         self.replace_button.clicked.connect(self.replace)
         self.close_button.clicked.connect(self.close)
 
@@ -325,19 +324,40 @@ class FindReplaceDialog(QDialog):
         form_layout.addWidget(self.replace_input)
 
         layout.addLayout(form_layout)
-        # layout.addWidget(self.find_button)
+
+        # Create a grid layout for checkboxes
+        checkbox_layout = QGridLayout()
+        self.measurement_checkbox = QCheckBox("Measurement Table")
+        self.observable_checkbox = QCheckBox("Observable Table")
+        self.parameter_checkbox = QCheckBox("Parameter Table")
+        self.condition_checkbox = QCheckBox("Condition Table")
+
+        checkbox_layout.addWidget(self.measurement_checkbox, 0, 0)
+        checkbox_layout.addWidget(self.observable_checkbox, 0, 1)
+        checkbox_layout.addWidget(self.parameter_checkbox, 1, 0)
+        checkbox_layout.addWidget(self.condition_checkbox, 1, 1)
+
+        layout.addLayout(checkbox_layout)
+
         layout.addWidget(self.replace_button)
         layout.addWidget(self.close_button)
         self.setLayout(layout)
 
-    # def find(self):
-    #     find_text = self.find_input.text()
-    #     self.parent().controller.find_text(find_text)
-
     def replace(self):
         find_text = self.find_input.text()
         replace_text = self.replace_input.text()
-        self.parent().controller.replace_text(find_text, replace_text)
+
+        selected_models = []
+        if self.measurement_checkbox.isChecked():
+            selected_models.append(0)
+        if self.observable_checkbox.isChecked():
+            selected_models.append(1)
+        if self.parameter_checkbox.isChecked():
+            selected_models.append(2)
+        if self.condition_checkbox.isChecked():
+            selected_models.append(3)
+
+        self.parent().controller.replace_text(find_text, replace_text, selected_models)
 
 
 class SyntaxHighlighter(QSyntaxHighlighter):
