@@ -299,10 +299,11 @@ def set_dtypes(data_frame, columns, index_columns=None):
 
 
 class FindReplaceDialog(QDialog):
-    def __init__(self, parent=None, mode="petab"):
+    def __init__(self, parent=None, mode="petab", checkbox_states=None):
         super().__init__(parent)
         self.setWindowTitle("Find and Replace")
         self.mode = mode
+        self.checkbox_states = checkbox_states or {}
 
         self.find_label = QLabel("Find:")
         self.find_input = QLineEdit()
@@ -326,8 +327,9 @@ class FindReplaceDialog(QDialog):
 
         layout.addLayout(form_layout)
 
+        checkbox_layout = QGridLayout()
+
         if self.mode == "petab":
-            checkbox_layout = QGridLayout()
             self.measurement_checkbox = QCheckBox("Measurement Table")
             self.observable_checkbox = QCheckBox("Observable Table")
             self.parameter_checkbox = QCheckBox("Parameter Table")
@@ -338,20 +340,36 @@ class FindReplaceDialog(QDialog):
             checkbox_layout.addWidget(self.parameter_checkbox, 1, 0)
             checkbox_layout.addWidget(self.condition_checkbox, 1, 1)
 
-            layout.addLayout(checkbox_layout)
+            self.measurement_checkbox.setChecked(self.checkbox_states.get("measurement", False))
+            self.observable_checkbox.setChecked(self.checkbox_states.get("observable", False))
+            self.parameter_checkbox.setChecked(self.checkbox_states.get("parameter", False))
+            self.condition_checkbox.setChecked(self.checkbox_states.get("condition", False))
         else:  # SBML mode
-            checkbox_layout = QGridLayout()
             self.sbml_checkbox = QCheckBox("SBML Text")
             self.antimony_checkbox = QCheckBox("Antimony Text")
 
             checkbox_layout.addWidget(self.sbml_checkbox, 0, 0)
             checkbox_layout.addWidget(self.antimony_checkbox, 0, 1)
 
-            layout.addLayout(checkbox_layout)
+            self.sbml_checkbox.setChecked(self.checkbox_states.get("sbml", False))
+            self.antimony_checkbox.setChecked(self.checkbox_states.get("antimony", False))
+
+        layout.addLayout(checkbox_layout)
 
         layout.addWidget(self.replace_button)
         layout.addWidget(self.close_button)
         self.setLayout(layout)
+
+    def closeEvent(self, event):
+        if self.mode == "petab":
+            self.checkbox_states["measurement"] = self.measurement_checkbox.isChecked()
+            self.checkbox_states["observable"] = self.observable_checkbox.isChecked()
+            self.checkbox_states["parameter"] = self.parameter_checkbox.isChecked()
+            self.checkbox_states["condition"] = self.condition_checkbox.isChecked()
+        else:  # SBML mode
+            self.checkbox_states["sbml"] = self.sbml_checkbox.isChecked()
+            self.checkbox_states["antimony"] = self.antimony_checkbox.isChecked()
+        super().closeEvent(event)
 
     def replace(self):
         find_text = self.find_input.text()
@@ -379,6 +397,7 @@ class FindReplaceDialog(QDialog):
                 antimony_text = self.parent().antimony_text_edit.toPlainText()
                 antimony_text = antimony_text.replace(find_text, replace_text)
                 self.parent().antimony_text_edit.setPlainText(antimony_text)
+
 
 
 

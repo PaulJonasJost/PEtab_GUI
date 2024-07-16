@@ -28,9 +28,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         self.main_layout = QVBoxLayout(central_widget)
 
-        self.find_replace_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
-        self.find_replace_shortcut.activated.connect(self.open_find_replace_dialog)
-
         self.init_tabs()
         self.init_buttons()
 
@@ -209,14 +206,6 @@ class MainWindow(QMainWindow):
         context_menu.addAction(delete_action)
 
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
-
-    def open_find_replace_dialog(self):
-        current_tab = self.tabs.currentIndex()
-        if current_tab == 0:
-            dialog = FindReplaceDialog(self, mode="petab")
-        elif current_tab == 1:
-            dialog = FindReplaceDialog(self, mode="sbml")
-        dialog.exec()
 
     def setup_sbml_tab(self):
         layout = QVBoxLayout(self.sbml_tab)
