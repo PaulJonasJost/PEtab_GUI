@@ -14,7 +14,7 @@ from utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
 class PandasTableModel(QAbstractTableModel):
     observable_id_changed = Signal(str, str)  # Signal to notify observableId changes
 
-    def __init__(self, data_frame, allowed_columns, table_type, parent=None):
+    def __init__(self, data_frame, allowed_columns, table_type, controller=None, parent=None):
         super().__init__(parent)
         self._data_frame = data_frame
         self._allowed_columns = allowed_columns
@@ -163,16 +163,29 @@ class PandasTableModel(QAbstractTableModel):
     def check_petab_lint(self, row_data):
         # Implement the actual check logic based on the table type
         if self.table_type == "measurement":
-            return petab.check_measurement_df(row_data)
+            return petab.check_measurement_df(
+                row_data,
+                observable_df=self.controller.models[1]._data_frame,
+            )
         elif self.table_type == "observable":
             row_data = row_data.set_index("observableId")
             return petab.check_observable_df(row_data)
         elif self.table_type == "parameter":
             row_data = row_data.set_index("parameterId")
-            return petab.check_parameter_df(row_data)
+            return petab.check_parameter_df(
+                row_data,
+                observable_df=self.controller.models[1]._data_frame,
+                measurement_df=self.controller.models[0]._data_frame,
+                condition_df=self.controller.models[3]._data_frame,
+                # TODO: add SBML model
+            )
         elif self.table_type == "condition":
             row_data = row_data.set_index("conditionId")
-            return petab.check_condition_df(row_data)
+            return petab.check_condition_df(
+                row_data,
+                observable_df=self.controller.models[1]._data_frame,
+                # TODO: add SBML model
+            )
         return True
 
     def add_column(self, column_name, default_value):

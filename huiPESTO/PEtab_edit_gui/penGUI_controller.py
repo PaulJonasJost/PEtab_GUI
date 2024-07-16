@@ -16,10 +16,10 @@ class Controller:
         self.view = view
 
         _data_frames = [
-            set_dtypes(data_frames[0].fillna(""), MEASUREMENT_COLUMNS),
-            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS),
-            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS),
-            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS)
+            set_dtypes(data_frames[0].fillna(""), MEASUREMENT_COLUMNS, self),
+            set_dtypes(data_frames[1].fillna(""), OBSERVABLE_COLUMNS, self),
+            set_dtypes(data_frames[2].fillna(""), PARAMETER_COLUMNS, self),
+            set_dtypes(data_frames[3].fillna(""), CONDITION_COLUMNS, self),
         ]
 
         self.models = [
