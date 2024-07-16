@@ -7,7 +7,7 @@ import petab
 import tellurium as te
 import libsbml
 
-from utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
+from .utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
     ParameterInputDialog, ConditionInputDialog, validate_value
 
 
