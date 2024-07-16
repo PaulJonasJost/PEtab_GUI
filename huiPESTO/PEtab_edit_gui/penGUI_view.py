@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
-    QStackedWidget, QToolButton, QStyle
+    QStackedWidget, QToolButton, QStyle, QInputDialog
 import PySide6.QtWidgets as widgets
 from PySide6.QtCore import Qt, QModelIndex
 from PySide6.QtGui import QAction, QShortcut, QKeySequence
@@ -211,7 +211,11 @@ class MainWindow(QMainWindow):
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
 
     def open_find_replace_dialog(self):
-        dialog = FindReplaceDialog(self)
+        current_tab = self.tabs.currentIndex()
+        if current_tab == 0:
+            dialog = FindReplaceDialog(self, mode="petab")
+        elif current_tab == 1:
+            dialog = FindReplaceDialog(self, mode="sbml")
         dialog.exec()
 
     def setup_sbml_tab(self):

@@ -299,9 +299,10 @@ def set_dtypes(data_frame, columns, index_columns=None):
 
 
 class FindReplaceDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, mode="petab"):
         super().__init__(parent)
         self.setWindowTitle("Find and Replace")
+        self.mode = mode
 
         self.find_label = QLabel("Find:")
         self.find_input = QLineEdit()
@@ -325,19 +326,28 @@ class FindReplaceDialog(QDialog):
 
         layout.addLayout(form_layout)
 
-        # Create a grid layout for checkboxes
-        checkbox_layout = QGridLayout()
-        self.measurement_checkbox = QCheckBox("Measurement Table")
-        self.observable_checkbox = QCheckBox("Observable Table")
-        self.parameter_checkbox = QCheckBox("Parameter Table")
-        self.condition_checkbox = QCheckBox("Condition Table")
+        if self.mode == "petab":
+            checkbox_layout = QGridLayout()
+            self.measurement_checkbox = QCheckBox("Measurement Table")
+            self.observable_checkbox = QCheckBox("Observable Table")
+            self.parameter_checkbox = QCheckBox("Parameter Table")
+            self.condition_checkbox = QCheckBox("Condition Table")
 
-        checkbox_layout.addWidget(self.measurement_checkbox, 0, 0)
-        checkbox_layout.addWidget(self.observable_checkbox, 0, 1)
-        checkbox_layout.addWidget(self.parameter_checkbox, 1, 0)
-        checkbox_layout.addWidget(self.condition_checkbox, 1, 1)
+            checkbox_layout.addWidget(self.measurement_checkbox, 0, 0)
+            checkbox_layout.addWidget(self.observable_checkbox, 0, 1)
+            checkbox_layout.addWidget(self.parameter_checkbox, 1, 0)
+            checkbox_layout.addWidget(self.condition_checkbox, 1, 1)
 
-        layout.addLayout(checkbox_layout)
+            layout.addLayout(checkbox_layout)
+        else:  # SBML mode
+            checkbox_layout = QGridLayout()
+            self.sbml_checkbox = QCheckBox("SBML Text")
+            self.antimony_checkbox = QCheckBox("Antimony Text")
+
+            checkbox_layout.addWidget(self.sbml_checkbox, 0, 0)
+            checkbox_layout.addWidget(self.antimony_checkbox, 0, 1)
+
+            layout.addLayout(checkbox_layout)
 
         layout.addWidget(self.replace_button)
         layout.addWidget(self.close_button)
@@ -347,17 +357,29 @@ class FindReplaceDialog(QDialog):
         find_text = self.find_input.text()
         replace_text = self.replace_input.text()
 
-        selected_models = []
-        if self.measurement_checkbox.isChecked():
-            selected_models.append(0)
-        if self.observable_checkbox.isChecked():
-            selected_models.append(1)
-        if self.parameter_checkbox.isChecked():
-            selected_models.append(2)
-        if self.condition_checkbox.isChecked():
-            selected_models.append(3)
+        if self.mode == "petab":
+            selected_models = []
+            if self.measurement_checkbox.isChecked():
+                selected_models.append(0)
+            if self.observable_checkbox.isChecked():
+                selected_models.append(1)
+            if self.parameter_checkbox.isChecked():
+                selected_models.append(2)
+            if self.condition_checkbox.isChecked():
+                selected_models.append(3)
 
-        self.parent().controller.replace_text(find_text, replace_text, selected_models)
+            self.parent().controller.replace_text(find_text, replace_text, selected_models)
+        else:  # SBML mode
+            if self.sbml_checkbox.isChecked():
+                sbml_text = self.parent().sbml_text_edit.toPlainText()
+                sbml_text = sbml_text.replace(find_text, replace_text)
+                self.parent().sbml_text_edit.setPlainText(sbml_text)
+
+            if self.antimony_checkbox.isChecked():
+                antimony_text = self.parent().antimony_text_edit.toPlainText()
+                antimony_text = antimony_text.replace(find_text, replace_text)
+                self.parent().antimony_text_edit.setPlainText(antimony_text)
+
 
 
 class SyntaxHighlighter(QSyntaxHighlighter):
