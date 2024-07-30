@@ -72,7 +72,7 @@ class PandasTableModel(QAbstractTableModel):
 
             # Emit rowChanged signal if the table type is measurement
             if self.table_type == "measurement":
-                self.rowChanged.emit(index.row())
+                self.dataChanged.emit(index, index, [Qt.DisplayRole])
 
             return True
         return False

@@ -9,6 +9,7 @@ from .utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
     ConditionInputDialog, set_dtypes
 from .penGUI_model import PandasTableModel, SbmlViewerModel
+from PySide6.QtCore import Qt
 
 
 class Controller:
@@ -47,16 +48,23 @@ class Controller:
     def setup_connections(self):
         for i, table_view in enumerate(self.view.tables):
             table_view.setModel(self.models[i])
-            self.view.add_row_buttons[i].clicked.connect(lambda _, x=i: self.add_row(x))
-            self.view.add_column_buttons[i].clicked.connect(lambda _, x=i: self.add_column(x))
+            self.view.add_row_buttons[i].clicked.connect(
+                lambda _, x=i: self.add_row(x))
+            self.view.add_column_buttons[i].clicked.connect(
+                lambda _, x=i: self.add_column(x))
 
         self.view.finish_button.clicked.connect(self.finish_editing)
-        self.view.upload_data_matrix_button.clicked.connect(self.upload_data_matrix)
-        self.view.reset_to_original_button.clicked.connect(self.reset_to_original_model)
-        self.models[1].observable_id_changed.connect(self.handle_observable_id_change)
+        self.view.upload_data_matrix_button.clicked.connect(
+            self.upload_data_matrix)
+        self.view.reset_to_original_button.clicked.connect(
+            self.reset_to_original_model)
+        self.models[1].observable_id_changed.connect(
+            self.handle_observable_id_change)
         self.view.tables[0].selectionModel().selectionChanged.connect(
             self.handle_selection_changed
         )
+        self.models[0].dataChanged.connect(
+            self.handle_data_changed)  # Connect dataChanged signal
 
         self.view.forward_sbml_button.clicked.connect(
             self.update_antimony_from_sbml
@@ -283,25 +291,61 @@ class Controller:
         model.layoutChanged.emit()
 
     def handle_selection_changed(self, selected, deselected):
-        indexes = selected.indexes()
-        if indexes:
-            row = indexes[0].row()
-            observable_id = self.models[0]._data_frame.iloc[row]["observableId"]
-            selected_point = {
-                "x": self.models[0]._data_frame.iloc[row]["time"],
-                "y": self.models[0]._data_frame.iloc[row]["measurement"]
-            }
-            self.update_plot(observable_id, selected_point)
+        self.update_plot()
 
-    def update_plot(self, observable_id, selected_point):
+    def update_plot(self):
+        selection_model = self.view.tables[0].selectionModel()
+        indexes = selection_model.selectedIndexes()
+
+        selected_points = {}
+        if indexes:
+            for index in indexes:
+                row = index.row()
+                observable_id = self.models[0]._data_frame.iloc[row][
+                    "observableId"]
+                if observable_id not in selected_points:
+                    selected_points[observable_id] = []
+                selected_points[observable_id].append({
+                    "x": self.models[0]._data_frame.iloc[row]["time"],
+                    "y": self.models[0]._data_frame.iloc[row]["measurement"]
+                })
+
         measurement_data = self.models[0]._data_frame
-        observable_data = measurement_data[measurement_data["observableId"] == observable_id]
         plot_data = {
-            "x": observable_data["time"].tolist(),
-            "y": observable_data["measurement"].tolist(),
-            "selected_point": selected_point
+            "all_data": [],
+            "selected_points": selected_points
         }
+        for observable_id in selected_points.keys():
+            observable_data = measurement_data[
+                measurement_data["observableId"] == observable_id]
+            plot_data["all_data"].append({
+                "observable_id": observable_id,
+                "x": observable_data["time"].tolist(),
+                "y": observable_data["measurement"].tolist()
+            })
+
         self.view.update_visualization(plot_data)
+
+    def handle_data_changed(self, top_left, bottom_right, roles):
+        if not roles or Qt.DisplayRole in roles:
+            self.update_plot()
+
+    def update_plot_based_on_current_selection(self):
+        selection_model = self.view.tables[0].selectionModel()
+        indexes = selection_model.selectedIndexes()
+        if indexes:
+            selected_points = {}
+            for index in indexes:
+                row = index.row()
+                observable_id = self.models[0]._data_frame.iloc[row][
+                    "observableId"]
+                if observable_id not in selected_points:
+                    selected_points[observable_id] = []
+                selected_points[observable_id].append({
+                    "x": self.models[0]._data_frame.iloc[row]["time"],
+                    "y": self.models[0]._data_frame.iloc[row]["measurement"]
+                })
+            self.update_plot(selected_points)
 
     # def find_text(self, text):
     #     for model in self.models:
