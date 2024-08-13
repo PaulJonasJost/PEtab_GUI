@@ -1,9 +1,8 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
-    QStackedWidget, QToolButton, QStyle
-import PySide6.QtWidgets as widgets
-from PySide6.QtCore import Qt, QModelIndex
+    QStackedWidget, QToolButton, QStyle, QAbstractItemView
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QShortcut, QKeySequence
 import sys
 from .C import CONFIG
@@ -209,6 +208,12 @@ class MainWindow(QMainWindow):
 
     def show_context_menu(self, pos, table_index):
         table_view = self.tables[table_index]
+        # Ensure that the selection mode is set to multi-selection
+        table_view.setSelectionMode(QAbstractItemView.MultiSelection)
+        table_view.setSelectionBehavior(QAbstractItemView.SelectRows)
+        original_selection_mode = table_view.selectionMode()
+        original_selection_behavior = table_view.selectionBehavior()
+
         index = table_view.indexAt(pos)
 
         if not index.isValid():
@@ -223,16 +228,16 @@ class MainWindow(QMainWindow):
         # Add the row where the right-click occurred
         rows_to_select.add(index.row())
 
-        # Select all rows that need to be selected
-        for row in rows_to_select:
-            table_view.selectRow(row)
-
         context_menu = QMenu(self)
         delete_action = QAction("Delete Row", self)
-        delete_action.triggered.connect(lambda: self.controller.delete_row(table_index))
+        delete_action.triggered.connect(
+            lambda: self.controller.delete_row(table_index, rows_to_select)
+        )
         context_menu.addAction(delete_action)
 
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
+        table_view.setSelectionMode(original_selection_mode)
+        table_view.setSelectionBehavior(original_selection_behavior)
 
     def open_find_replace_dialog(self):
         dialog = FindReplaceDialog(self)
@@ -277,22 +282,3 @@ class MainWindow(QMainWindow):
         splitter.addWidget(sbml_widget)
         splitter.addWidget(antimony_widget)
         layout.addWidget(splitter)
-    #
-    #     self.sbml_text_edit.textChanged.connect(self.on_sbml_text_changed)
-    #     self.antimony_text_edit.textChanged.connect(self.on_antimony_text_changed)
-    #
-    # def on_sbml_text_changed(self):
-    #     self.controller.sbml_model.sbml_text = self.sbml_text_edit.toPlainText()
-    #
-    # def on_antimony_text_changed(self):
-    #     self.controller.sbml_model.antimony_text = self.antimony_text_edit.toPlainText()
-    #
-    # def update_sbml_text(self, text):
-    #     self.sbml_text_edit.blockSignals(True)
-    #     self.sbml_text_edit.setPlainText(text)
-    #     self.sbml_text_edit.blockSignals(False)
-    #
-    # def update_antimony_text(self, text):
-    #     self.antimony_text_edit.blockSignals(True)
-    #     self.antimony_text_edit.setPlainText(text)
-    #     self.antimony_text_edit.blockSignals(False)
