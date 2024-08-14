@@ -4,11 +4,13 @@ import zipfile
 import tellurium as te
 import libsbml
 from io import BytesIO
-from C import *
-from utils import ParameterInputDialog, ObservableInputDialog, \
+import petab.v1 as petab
+from .C import *
+from .utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
     ConditionInputDialog, set_dtypes
-from penGUI_model import PandasTableModel, SbmlViewerModel
+from .penGUI_model import PandasTableModel, SbmlViewerModel
+from PySide6.QtCore import Qt
 
 
 class Controller:
@@ -23,12 +25,10 @@ class Controller:
         ]
 
         self.models = [
-            PandasTableModel(_data_frames[0], MEASUREMENT_COLUMNS,
-                             "measurement", self),
-            PandasTableModel(_data_frames[1], OBSERVABLE_COLUMNS,
-                             "observable", self),
+            PandasTableModel(_data_frames[0], MEASUREMENT_COLUMNS, "measurement", self),
+            PandasTableModel(_data_frames[1], OBSERVABLE_COLUMNS, "observable", self),
             PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter", self),
-            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition", self),
+            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition", self)
         ]
         self.sbml_model = SbmlViewerModel(sbml_model=sbml_model)
         # set the text of the SBML and Antimony model
@@ -47,16 +47,23 @@ class Controller:
     def setup_connections(self):
         for i, table_view in enumerate(self.view.tables):
             table_view.setModel(self.models[i])
-            self.view.add_row_buttons[i].clicked.connect(lambda _, x=i: self.add_row(x))
-            self.view.add_column_buttons[i].clicked.connect(lambda _, x=i: self.add_column(x))
+            self.view.add_row_buttons[i].clicked.connect(
+                lambda _, x=i: self.add_row(x))
+            self.view.add_column_buttons[i].clicked.connect(
+                lambda _, x=i: self.add_column(x))
 
         self.view.finish_button.clicked.connect(self.finish_editing)
-        self.view.upload_data_matrix_button.clicked.connect(self.upload_data_matrix)
-        self.view.reset_to_original_button.clicked.connect(self.reset_to_original_model)
-        self.models[1].observable_id_changed.connect(self.handle_observable_id_change)
+        self.view.upload_data_matrix_button.clicked.connect(
+            self.upload_data_matrix)
+        self.view.reset_to_original_button.clicked.connect(
+            self.reset_to_original_model)
+        self.models[1].observable_id_changed.connect(
+            self.handle_observable_id_change)
         self.view.tables[0].selectionModel().selectionChanged.connect(
             self.handle_selection_changed
         )
+        self.models[0].dataChanged.connect(
+            self.handle_data_changed)  # Connect dataChanged signal
 
         self.view.forward_sbml_button.clicked.connect(
             self.update_antimony_from_sbml
@@ -269,39 +276,80 @@ class Controller:
                 measurement_model._data_frame.at[row, "observableId"] = new_id
         measurement_model.layoutChanged.emit()
 
-    def delete_row(self, table_index):
+    def delete_row(self, table_index, selected_rows=None):
         table_view = self.view.tables[table_index]
         model = self.models[table_index]
         selection_model = table_view.selectionModel()
-        selected_indexes = selection_model.selectedRows()
 
-        if not selected_indexes:
+        if selected_rows is None:
+            selected_indexes = selection_model.selectedRows()
+            selected_rows = [index.row() for index in selected_indexes]
+
+        if not selected_rows:
             return
 
-        for index in sorted(selected_indexes):
-            model._data_frame.drop(index.row(), inplace=True)
+        for row in sorted(selected_rows, reverse=True):
+            model._data_frame.drop(row, inplace=True)
+        model._data_frame.reset_index(drop=True, inplace=True)
+
         model.layoutChanged.emit()
 
     def handle_selection_changed(self, selected, deselected):
-        indexes = selected.indexes()
-        if indexes:
-            row = indexes[0].row()
-            observable_id = self.models[0]._data_frame.iloc[row]["observableId"]
-            selected_point = {
-                "x": self.models[0]._data_frame.iloc[row]["time"],
-                "y": self.models[0]._data_frame.iloc[row]["measurement"]
-            }
-            self.update_plot(observable_id, selected_point)
+        self.update_plot()
 
-    def update_plot(self, observable_id, selected_point):
+    def update_plot(self):
+        selection_model = self.view.tables[0].selectionModel()
+        indexes = selection_model.selectedIndexes()
+
+        selected_points = {}
+        if indexes:
+            for index in indexes:
+                row = index.row()
+                observable_id = self.models[0]._data_frame.iloc[row][
+                    "observableId"]
+                if observable_id not in selected_points:
+                    selected_points[observable_id] = []
+                selected_points[observable_id].append({
+                    "x": self.models[0]._data_frame.iloc[row]["time"],
+                    "y": self.models[0]._data_frame.iloc[row]["measurement"]
+                })
+
         measurement_data = self.models[0]._data_frame
-        observable_data = measurement_data[measurement_data["observableId"] == observable_id]
         plot_data = {
-            "x": observable_data["time"].tolist(),
-            "y": observable_data["measurement"].tolist(),
-            "selected_point": selected_point
+            "all_data": [],
+            "selected_points": selected_points
         }
+        for observable_id in selected_points.keys():
+            observable_data = measurement_data[
+                measurement_data["observableId"] == observable_id]
+            plot_data["all_data"].append({
+                "observable_id": observable_id,
+                "x": observable_data["time"].tolist(),
+                "y": observable_data["measurement"].tolist()
+            })
+
         self.view.update_visualization(plot_data)
+
+    def handle_data_changed(self, top_left, bottom_right, roles):
+        if not roles or Qt.DisplayRole in roles:
+            self.update_plot()
+
+    def update_plot_based_on_current_selection(self):
+        selection_model = self.view.tables[0].selectionModel()
+        indexes = selection_model.selectedIndexes()
+        if indexes:
+            selected_points = {}
+            for index in indexes:
+                row = index.row()
+                observable_id = self.models[0]._data_frame.iloc[row][
+                    "observableId"]
+                if observable_id not in selected_points:
+                    selected_points[observable_id] = []
+                selected_points[observable_id].append({
+                    "x": self.models[0]._data_frame.iloc[row]["time"],
+                    "y": self.models[0]._data_frame.iloc[row]["measurement"]
+                })
+            self.update_plot(selected_points)
 
     # def find_text(self, text):
     #     for model in self.models:
@@ -380,3 +428,29 @@ class Controller:
         self.sbml_model.antimony_text = te.sbmlToAntimony(self.sbml_model.sbml_text)
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
         self.view.antimony_text_edit.setPlainText(self.sbml_model.antimony_text)
+
+    def check_petab_lint(self, row_data, table_type):
+        if table_type == "measurement":
+            observable_df = self.models[1]._data_frame
+            return petab.check_measurement_df(row_data,
+                                              observable_df=observable_df)
+        elif table_type == "observable":
+            return petab.check_observable_df(
+                row_data.set_index("observableId"))
+        elif table_type == "parameter":
+            model = self.sbml_model
+            observable_df = self.models[1]._data_frame
+            measurement_df = self.models[0]._data_frame
+            condition_df = self.models[3]._data_frame
+            return petab.check_parameter_df(row_data.set_index("parameterId"),
+                                            model=model,
+                                            observable_df=observable_df,
+                                            measurement_df=measurement_df,
+                                            condition_df=condition_df)
+        elif table_type == "condition":
+            model = self.sbml_model
+            observable_df = self.models[1]._data_frame
+            return petab.check_condition_df(row_data.set_index("conditionId"),
+                                            model=model,
+                                            observable_df=observable_df)
+        return True

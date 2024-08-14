@@ -8,7 +8,7 @@ import tellurium as te
 import libsbml
 import copy
 
-from utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
+from .utils import set_dtypes, MeasurementInputDialog, ObservableInputDialog,\
     ParameterInputDialog, ConditionInputDialog, validate_value
 
 
@@ -21,7 +21,7 @@ class PandasTableModel(QAbstractTableModel):
         self._allowed_columns = allowed_columns
         self.table_type = table_type
         self.controller = controller
-        self._invalid_rows = set()
+        self._invalid_cells = set()
 
     def sort(self, column, order):
         """
@@ -47,9 +47,10 @@ class PandasTableModel(QAbstractTableModel):
         if role == Qt.DisplayRole or role == Qt.EditRole:
             value = self._data_frame.iloc[index.row(), index.column()]
             return str(value)
-        elif role == Qt.BackgroundRole and index.row() in self._invalid_rows:
+        elif role == Qt.BackgroundRole and (index.row(), index.column()) in self._invalid_cells:
             return QColor(Qt.red)
         return None
+
 
     def setData(self, index, value, role=Qt.EditRole):
         if index.isValid() and role == Qt.EditRole:
@@ -70,23 +71,36 @@ class PandasTableModel(QAbstractTableModel):
                 self.dataChanged.emit(index, index, [Qt.DisplayRole])
 
             # Validate the row after setting data
-            self.validate_row(index.row())
+            self.validate_changed_cell(index.row(), index.column())
+
+            # Emit rowChanged signal if the table type is measurement
+            if self.table_type == "measurement":
+                self.dataChanged.emit(index, index, [Qt.DisplayRole])
+
             return True
         return False
 
-    def validate_row(self, row_index):
+    def validate_changed_cell(self, row_index, column_index):
         row_data = self._data_frame.iloc[row_index]
         row_data = set_dtypes(row_data.to_frame().T, self._allowed_columns)
+
         error_message = None
         try:
             self.check_petab_lint(row_data)
+            for col in range(self.columnCount()):
+                self._invalid_cells.discard((row_index, col))
+            error_message = None
         except Exception as e:
             error_message = e
+
         if error_message:
-            self._invalid_rows.add(row_index)
+            self._invalid_cells.add((row_index, column_index))
         else:
-            self._invalid_rows.discard(row_index)
-        self.dataChanged.emit(self.index(row_index, 0), self.index(row_index, self.columnCount() - 1), [Qt.BackgroundRole])
+            self._invalid_cells.discard((row_index, column_index))
+
+        self.dataChanged.emit(self.index(row_index, column_index),
+                              self.index(row_index, column_index),
+                              [Qt.BackgroundRole])
 
     def flags(self, index):
         if not index.isValid():
@@ -112,18 +126,13 @@ class PandasTableModel(QAbstractTableModel):
 
         for key, value in kwargs.items():
             if key in self._data_frame.columns:
-                # check that the value is of the correct type
                 expected_type = self._allowed_columns.get(key)
                 if expected_type:
                     value, error_message = validate_value(value, expected_type)
                     if error_message:
-                        # show a warning and delete the new row
                         error_message = f"Column '{key}' expects a value of type {expected_type}, but got '{value}'"
                         QMessageBox.warning(None, "Input Error", error_message)
-
-                        # Open the appropriate dialog with values prefilled
                         self.open_dialog_with_values(kwargs, key)
-
                         self._data_frame.drop(index=new_index, inplace=True)
                         self.layoutChanged.emit()
                         return False
@@ -132,17 +141,21 @@ class PandasTableModel(QAbstractTableModel):
         # Adding specific defaults based on the type of table
         if self.table_type == "observable":
             if "noiseFormula" in self._data_frame.columns:
-                self._data_frame.loc[new_index, "noiseFormula"] = f"noiseParameter1_{kwargs.get('observableId')}"
+                self._data_frame.loc[
+                    new_index, "noiseFormula"] = f"noiseParameter1_{kwargs.get('observableId')}"
             if "observableTransformation" in self._data_frame.columns:
-                self._data_frame.loc[new_index, "observableTransformation"] = "lin"
+                self._data_frame.loc[
+                    new_index, "observableTransformation"] = "lin"
             if "noiseDistribution" in self._data_frame.columns:
                 self._data_frame.loc[new_index, "noiseDistribution"] = "normal"
             if "observableName" in self._data_frame.columns and "observableId" in kwargs:
-                self._data_frame.loc[new_index, "observableName"] = kwargs.get("observableId")
+                self._data_frame.loc[new_index, "observableName"] = kwargs.get(
+                    "observableId")
 
         elif self.table_type == "parameter":
             if "parameterName" in self._data_frame.columns and "parameterId" in kwargs:
-                self._data_frame.loc[new_index, "parameterName"] = kwargs.get("parameterId")
+                self._data_frame.loc[new_index, "parameterName"] = kwargs.get(
+                    "parameterId")
             if "parameterScale" in self._data_frame.columns:
                 self._data_frame.loc[new_index, "parameterScale"] = "log10"
             if "lowerBound" in self._data_frame.columns:
@@ -152,10 +165,31 @@ class PandasTableModel(QAbstractTableModel):
             if "estimate" in self._data_frame.columns:
                 self._data_frame.loc[new_index, "estimate"] = 1
 
-        # validate the row
-        self.validate_row(new_index)
+        # Validate the entire row
+        self.validate_new_row(new_index)
         self.layoutChanged.emit()
         return True
+
+    def validate_new_row(self, row_index):
+        row_data = self._data_frame.iloc[row_index]
+        row_data = set_dtypes(row_data.to_frame().T, self._allowed_columns)
+        error_message = None
+        try:
+            self.controller.check_petab_lint(row_data, self.table_type)
+            error_message = None
+        except Exception as e:
+            error_message = e
+
+        if error_message:
+            for col in range(self.columnCount()):
+                self._invalid_cells.add((row_index, col))
+        else:
+            for col in range(self.columnCount()):
+                self._invalid_cells.discard((row_index, col))
+
+        self.dataChanged.emit(self.index(row_index, 0),
+                              self.index(row_index, self.columnCount() - 1),
+                              [Qt.BackgroundRole])
 
     def check_petab_lint(self, row_data):
         # Implement the actual check logic based on the table type

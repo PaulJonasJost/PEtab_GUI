@@ -1,0 +1,36 @@
+[project]
+name = 'PEtab-GUI'
+dynamic = ["version"]
+readme = "README.md"
+
+dependencies = [
+    "wheel",
+    "pyside6",
+    "pandas",
+    "tellurium",
+    "python-libsbml",
+    "matplotlib",
+    "petab"
+]
+
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "pyside6",
+    "pandas",
+    "tellurium",
+    "python-libsbml",
+    "matplotlib",
+    "petab"
+]
+
+[project.urls]
+Repository = "https://github.com/PaulJonasJost/pyPESTO_GUI"
+Issues = "https://github.com/PaulJonasJost/pyPESTO_GUI/issues"
+
+[project.gui-scripts]
+PEtab_gui = "huiPESTO.PEtab_edit_gui.sub_app:main"
+
+[project.scripts]
+PEtab_gui_cli = "huiPESTO.PEtab_edit_gui.sub_app:main"
