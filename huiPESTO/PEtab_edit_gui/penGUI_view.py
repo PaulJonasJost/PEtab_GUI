@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
-    QStackedWidget, QToolButton, QStyle, QAbstractItemView
+    QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QShortcut, QKeySequence
 import sys
@@ -55,9 +55,17 @@ class MainWindow(QMainWindow):
         self.finish_button = QPushButton("Finish Editing")
         self.reset_to_original_button.hide()
 
-        self.main_layout.addWidget(self.upload_data_matrix_button)
-        self.main_layout.addWidget(self.reset_to_original_button)
-        self.main_layout.addWidget(self.finish_button)
+        self.logger = QTextBrowser()
+        button_layout = QVBoxLayout()
+
+        button_layout.addWidget(self.upload_data_matrix_button)
+        button_layout.addWidget(self.reset_to_original_button)
+        button_layout.addWidget(self.finish_button)
+
+        layout = QHBoxLayout()
+        layout.addLayout(button_layout)
+        layout.addWidget(self.logger)
+        self.main_layout.addLayout(layout)
 
     def on_tab_changed(self, index):
         if index == 0:  # PEtab Tables tab

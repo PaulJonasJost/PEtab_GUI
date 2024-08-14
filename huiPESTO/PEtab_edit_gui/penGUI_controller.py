@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
 import pandas as pd
 import zipfile
+from datetime import datetime
 import tellurium as te
 import libsbml
 from io import BytesIO
@@ -87,12 +88,19 @@ class Controller:
             self.populate_tables_from_data_matrix(data_matrix, condition_id)
 
         except Exception as e:
-            QMessageBox.critical(self.view, "Error", f"An error occurred while processing the file: {str(e)}")
+            self.log_message(
+                f"An error occurred while uploading the data matrix: {str(e)}",
+                color="red"
+            )
 
     def load_data_matrix(self, file_name):
         data_matrix = pd.read_csv(file_name, delimiter='\t' if file_name.endswith('.tsv') else ',')
         if not any(col in data_matrix.columns for col in ["Time", "time", "t"]):
-            QMessageBox.warning(self.view, "Invalid File", "The file must contain a 'Time' column.")
+            self.log_message(
+                "Invalid File, the file must contain a 'Time' column. "
+                "Please ensure that the file contains a 'Time'",
+                color="red"
+                )
             return None
 
         time_column = next(col for col in ["Time", "time", "t"] if col in data_matrix.columns)
@@ -266,6 +274,11 @@ class Controller:
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
         if reply == QMessageBox.Yes:
+            self.log_message(
+                f"Renaming observable '{old_id}' to '{new_id}' in all "
+                f"measurements",
+                color="blue"
+            )
             self.rename_observable_in_measurements(old_id, new_id)
 
     def rename_observable_in_measurements(self, old_id, new_id):
@@ -289,12 +302,17 @@ class Controller:
             return
 
         for row in sorted(selected_rows, reverse=True):
+            self.log_message(
+                f"Deleted row {row} from {model.table_type} table."
+                f" Data: {model._data_frame.iloc[row].to_dict()}",
+                color="orange"
+            )
             model._data_frame.drop(row, inplace=True)
         model._data_frame.reset_index(drop=True, inplace=True)
 
         model.layoutChanged.emit()
 
-    def handle_selection_changed(self, selected, deselected):
+    def handle_selection_changed(self):
         self.update_plot()
 
     def update_plot(self):
@@ -362,6 +380,10 @@ class Controller:
     #                 print(f"Found '{text}' in row {row}, column {col}")
 
     def replace_text(self, find_text, replace_text, selected_models):
+        self.log_message(
+            f"Replacing '{find_text}' with '{replace_text}' in selected tables",
+            color="green"
+        )
         for index in selected_models:
             model = self.models[index]
             model._data_frame.replace(find_text, replace_text, inplace=True)
@@ -411,17 +433,23 @@ class Controller:
                 self.view.close()
 
     def update_antimony_from_sbml(self):
+        self.log_message("Converting SBML to Antimony", color="blue")
         self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
         self.sbml_model.convert_sbml_to_antimony()
         self.view.antimony_text_edit.setPlainText(
             self.sbml_model.antimony_text)
 
     def update_sbml_from_antimony(self):
+        self.log_message("Converting Antimony to SBML", color="blue")
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
         self.sbml_model.convert_antimony_to_sbml()
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
 
     def reset_to_original_model(self):
+        self.log_message(
+            "Resetting the model to the original SBML and Antimony text",
+            color="orange"
+        )
         self.sbml_model.sbml_text = libsbml.writeSBMLToString(
             self.sbml_model._sbml_model_original.sbml_model.getSBMLDocument()
         )
@@ -454,3 +482,9 @@ class Controller:
                                             model=model,
                                             observable_df=observable_df)
         return True
+
+    def log_message(self, message, color="black"):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        full_message = f"[{timestamp}]\t <span style='color:{color};'" \
+                       f">{message}</span>"
+        self.view.logger.append(full_message)
