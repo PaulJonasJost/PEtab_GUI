@@ -67,6 +67,10 @@ class MainWindow(QMainWindow):
         self.reset_to_original_button = QPushButton("Reset to Original Model")
         self.finish_button = QPushButton("Finish Editing")
         self.reset_to_original_button.hide()
+        button_size = self.reset_to_original_button.sizeHint()
+        self.finish_button.setMinimumSize(button_size)
+        self.upload_data_matrix_button.setMinimumSize(button_size)
+        self.reset_to_original_button.setMinimumSize(button_size)
 
         self.logger = QTextBrowser()
         button_layout = QVBoxLayout()
