@@ -2,8 +2,8 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
     QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QShortcut, QKeySequence
+from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QAction, QShortcut, QKeySequence, QCursor
 import sys
 from .C import CONFIG
 from .utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
@@ -21,22 +21,35 @@ class MainWindow(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("PEtab Editor")
-        self.setGeometry(100, 100, 800, 600)
-
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        self.main_layout = QVBoxLayout(central_widget)
 
-        self.find_replace_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
-        self.find_replace_shortcut.activated.connect(self.open_find_replace_dialog)
+        # Replace the main layout with a QSplitter
+        self.splitter = QSplitter(Qt.Vertical, central_widget)
 
+        # Initialize tabs and buttons
         self.init_tabs()
         self.init_buttons()
 
+        # Add the tabs and the button/info box layout to the splitter
+        self.splitter.addWidget(self.tabs)  # The tabs go on top
+        self.splitter.addWidget(
+            self.button_info_widget
+        )  # The buttons/info box goes below
+
+        # Set the initial size ratio
+        self.splitter.setStretchFactor(0, 8)
+        self.splitter.setStretchFactor(1, 2)
+
+        # Set the splitter as the main layout of the central widget
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.addWidget(self.splitter)
+
+        # Set the handle width to make it easier to grab and adjust
+        self.splitter.setHandleWidth(5)
+
     def init_tabs(self):
         self.tabs = QTabWidget()
-        self.main_layout.addWidget(self.tabs)
 
         self.petable_tab = QWidget()
         self.sbml_tab = QWidget()
@@ -62,10 +75,11 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.reset_to_original_button)
         button_layout.addWidget(self.finish_button)
 
-        layout = QHBoxLayout()
+        # Combine the button layout and logger into a single widget
+        self.button_info_widget = QWidget()
+        layout = QHBoxLayout(self.button_info_widget)
         layout.addLayout(button_layout)
         layout.addWidget(self.logger)
-        self.main_layout.addLayout(layout)
 
     def on_tab_changed(self, index):
         if index == 0:  # PEtab Tables tab
