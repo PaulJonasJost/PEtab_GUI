@@ -277,7 +277,7 @@ class Controller:
             self.log_message(
                 f"Renaming observable '{old_id}' to '{new_id}' in all "
                 f"measurements",
-                color="blue"
+                color="green"
             )
             self.rename_observable_in_measurements(old_id, new_id)
 
@@ -433,14 +433,14 @@ class Controller:
                 self.view.close()
 
     def update_antimony_from_sbml(self):
-        self.log_message("Converting SBML to Antimony", color="blue")
+        self.log_message("Converting SBML to Antimony", color="green")
         self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
         self.sbml_model.convert_sbml_to_antimony()
         self.view.antimony_text_edit.setPlainText(
             self.sbml_model.antimony_text)
 
     def update_sbml_from_antimony(self):
-        self.log_message("Converting Antimony to SBML", color="blue")
+        self.log_message("Converting Antimony to SBML", color="green")
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
         self.sbml_model.convert_antimony_to_sbml()
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
