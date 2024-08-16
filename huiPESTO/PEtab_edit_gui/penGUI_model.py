@@ -54,20 +54,27 @@ class PandasTableModel(QAbstractTableModel):
     def setData(self, index, value, role=Qt.EditRole):
         if index.isValid() and role == Qt.EditRole:
             column_name = self._data_frame.columns[index.column()]
+            old_value = self._data_frame.iloc[index.row(), index.column()]
             if column_name == "observableId":
-                old_value = self._data_frame.iloc[index.row(), index.column()]
                 self._data_frame.iloc[index.row(), index.column()] = value
-                self.dataChanged.emit(index, index, [Qt.DisplayRole])
                 if old_value != value:
+                    self.dataChanged.emit(index, index, [Qt.DisplayRole])
                     self.observable_id_changed.emit(old_value, value)
             else:
                 expected_type = self._allowed_columns.get(column_name)
                 if expected_type:
+                    tried_value = value
                     value, error_message = validate_value(value, expected_type)
                     if error_message:
+                        self.controller.log_message(
+                            f"Column '{column_name}' expects a value of "
+                            f"type {expected_type}, but got '{tried_value}'",
+                            color="red"
+                        )
                         return False
                 self._data_frame.iloc[index.row(), index.column()] = value
-                self.dataChanged.emit(index, index, [Qt.DisplayRole])
+                if old_value != value:
+                    self.dataChanged.emit(index, index, [Qt.DisplayRole])
 
             # Validate the row after setting data
             self.validate_changed_cell(index.row(), index.column())
@@ -90,6 +97,10 @@ class PandasTableModel(QAbstractTableModel):
                 self._invalid_cells.discard((row_index, col))
             error_message = None
         except Exception as e:
+            self.controller.log_message(
+                f"PEtab linter failed at row {row_index}, column"
+                f" {column_index}: {error_message}", color="red"
+            )
             error_message = e
 
         if error_message:
