@@ -21,6 +21,8 @@ class TaskBar:
 
         # Create the Upload Table submenu
         self.upload_table_menu = QMenu("Upload Tables or SBML", parent)
+        self.upload_yaml_action = QAction("Upload YAML Configuration", parent)
+        self.file_menu.addAction(self.upload_yaml_action)
         self.file_menu.addMenu(self.upload_table_menu)
 
         # Add actions for each table in the Upload Table submenu

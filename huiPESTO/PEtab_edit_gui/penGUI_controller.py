@@ -6,6 +6,7 @@ import tellurium as te
 import libsbml
 from io import BytesIO
 from petab.models.sbml_model import SbmlModel
+import yaml
 import petab.v1 as petab
 from .C import *
 from .utils import ParameterInputDialog, ObservableInputDialog, \
@@ -110,17 +111,66 @@ class Controller:
         task_bar.upload_sbml_action.triggered.connect(
             self.upload_and_overwrite_sbml
         )
+        # upload yaml
+        self.view.task_bar.upload_yaml_action.triggered.connect(
+            self.upload_yaml_and_load_files
+        )
 
-    def upload_and_overwrite_table(self, table_index):
-        # Open a file dialog to select the CSV or TSV file
-        file_path, _ = QFileDialog.getOpenFileName(self.view,
-                                                   "Open CSV or TSV", "",
-                                                   "CSV/TSV Files (*.csv *.tsv)")
+    def upload_yaml_and_load_files(self):
+        # Open a file dialog to select the YAML file
+        yaml_path, _ = QFileDialog.getOpenFileName(self.view, "Open YAML File",
+                                                   "",
+                                                   "YAML Files (*.yaml *.yml)")
+        if yaml_path:
+            try:
+                # Load the YAML content
+                with open(yaml_path, 'r') as file:
+                    yaml_content = yaml.safe_load(file)
+
+                # Resolve the directory of the YAML file to handle relative paths
+                yaml_dir = Path(yaml_path).parent
+
+                # Upload SBML model
+                sbml_file_path = yaml_dir / \
+                                 yaml_content['problems'][0]['sbml_files'][0]
+                self.upload_and_overwrite_sbml(sbml_file_path)
+                table_files = [
+                    ('measurement', 0,
+                     yaml_content['problems'][0]['measurement_files'][0]),
+                    ('observable', 1,
+                     yaml_content['problems'][0]['observable_files'][0]),
+                    ('parameter', 2, yaml_content['parameter_file']),
+                    # Assuming parameter_file is in the root
+                    ('condition', 3,
+                     yaml_content['problems'][0]['condition_files'][0])
+                ]
+
+                for table_name, table_index, table_file in table_files:
+                    table_file_path = yaml_dir / table_file
+                    self.upload_and_overwrite_table(table_index,
+                                                    table_file_path)
+
+                self.log_message(
+                    "All files uploaded successfully from the YAML configuration.",
+                    color="green"
+                )
+
+            except Exception as e:
+                self.log_message(
+                    f"Failed to upload files from YAML: {str(e)}", color="red"
+                )
+
+    def upload_and_overwrite_table(self, table_index, file_path=None):
+        if not file_path:
+            # Open a file dialog to select the CSV or TSV file
+            file_path, _ = QFileDialog.getOpenFileName(
+                self.view, "Open CSV or TSV", "", "CSV/TSV Files (*.csv *.tsv)"
+            )
         if file_path:
             # Determine the file extension to choose the correct separator
-            if file_path.endswith('.csv'):
+            if file_path.suffix == '.csv':
                 separator = ';'
-            elif file_path.endswith('.tsv'):
+            elif file_path.suffix == '.tsv':
                 separator = '\t'
             else:
                 self.view.log_message(
@@ -139,11 +189,12 @@ class Controller:
             # Overwrite the table with the new DataFrame
             self.overwrite_table(table_index, new_df)
 
-    def upload_and_overwrite_sbml(self):
-        # Open a file dialog to select an SBML file
-        file_path, _ = QFileDialog.getOpenFileName(self.view, "Open SBML File",
-                                                   "",
-                                                   "SBML Files (*.xml *.sbml)")
+    def upload_and_overwrite_sbml(self, file_path=None):
+        if not file_path:
+            # Open a file dialog to select an SBML file
+            file_path, _ = QFileDialog.getOpenFileName(
+                self.view, "Open SBML File", "", "SBML Files (*.xml *.sbml)"
+            )
         if file_path:
             try:
                 # Load the new SBML model from the file
