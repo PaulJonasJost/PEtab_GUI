@@ -10,6 +10,7 @@ from .utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
 from .penGUI_model import SbmlViewerModel
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.pyplot as plt
+from .task_bar import TaskBar
 
 
 class MainWindow(QMainWindow):
@@ -23,11 +24,10 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-
-        # Replace the main layout with a QSplitter
         self.splitter = QSplitter(Qt.Vertical, central_widget)
 
         # Initialize tabs and buttons
+        self.task_bar = TaskBar(self)
         self.init_tabs()
         self.init_buttons()
 
@@ -114,6 +114,17 @@ class MainWindow(QMainWindow):
         for i in range(2):
             self.grid_layout.setRowStretch(i, 1)
             self.grid_layout.setColumnStretch(i, 1)
+
+    def get_current_table_index(self):
+        # Choose the table that has focus and has a selection (blue highlight)
+        for index, table_view in enumerate(self.tables):
+            if table_view.hasFocus() and table_view.selectionModel().hasSelection():
+                return index
+        self.controller.log_message(
+            "No table was found active.",
+            color="orange"
+        )
+        return None
 
     def create_table_frame(self, index, label_text="", include_stacked_widget=False):
         frame = QFrame()

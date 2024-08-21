@@ -72,6 +72,26 @@ class Controller:
         self.view.forward_antimony_button.clicked.connect(
             self.update_sbml_from_antimony
         )
+        self.setup_task_bar()
+
+    def setup_task_bar(self):
+        """Create connections for the task bar actions."""
+        task_bar = self.view.task_bar
+        # Find and Replace
+        task_bar.find_replace_action.triggered.connect(self.view.open_find_replace_dialog)
+        # Save
+        task_bar.save_action.triggered.connect(
+            lambda: self.finish_editing(maybe_close_after=False)
+        )
+        # Save and Close
+        task_bar.exit_action.triggered.connect(
+            lambda: self.finish_editing(maybe_close_after=True)
+        )
+        # Delete Rows
+        task_bar.delete_action.triggered.connect(
+            lambda: self.delete_row(table_index=None)
+        )
+
 
     def upload_data_matrix(self):
         file_name, _ = QFileDialog.getOpenFileName(self.view, "Open Data Matrix", "", "CSV Files (*.csv);;TSV Files (*.tsv)")
@@ -289,16 +309,20 @@ class Controller:
                 measurement_model._data_frame.at[row, "observableId"] = new_id
         measurement_model.layoutChanged.emit()
 
-    def delete_row(self, table_index, selected_rows=None):
+    def delete_row(self, table_index=None, selected_rows=None):
+        if table_index is None:
+            table_index = self.view.get_current_table_index()
         table_view = self.view.tables[table_index]
+        print(selected_rows)
         model = self.models[table_index]
         selection_model = table_view.selectionModel()
 
         if selected_rows is None:
-            selected_indexes = selection_model.selectedRows()
+            selected_indexes = selection_model.selectedIndexes()
             selected_rows = [index.row() for index in selected_indexes]
 
         if not selected_rows:
+            print("No rows selected")
             return
 
         for row in sorted(selected_rows, reverse=True):
@@ -389,7 +413,7 @@ class Controller:
             model._data_frame.replace(find_text, replace_text, inplace=True)
             model.layoutChanged.emit()
 
-    def finish_editing(self):
+    def finish_editing(self, maybe_close_after: bool = True):
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(self.view,
                                                    "Save Project",
@@ -422,15 +446,15 @@ class Controller:
                 f"Project saved successfully to {file_name}"
             )
 
-            # Ask if the user wants to close the application
-            reply = QMessageBox.question(
-                self.view, "Close Application",
-                "Do you want to close the application?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply == QMessageBox.Yes:
-                self.view.close()
+            if maybe_close_after:
+                reply = QMessageBox.question(
+                    self.view, "Close Application",
+                    "Do you want to close the application?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    self.view.close()
 
     def update_antimony_from_sbml(self):
         self.log_message("Converting SBML to Antimony", color="green")
