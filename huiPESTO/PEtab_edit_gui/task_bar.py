@@ -19,6 +19,31 @@ class TaskBar:
         self.save_action = QAction("Save", parent)
         self.exit_action = QAction("Save and Close", parent)
 
+        # Create the Upload Table submenu
+        self.upload_table_menu = QMenu("Upload Tables or SBML", parent)
+        self.file_menu.addMenu(self.upload_table_menu)
+
+        # Add actions for each table in the Upload Table submenu
+        self.upload_measurement_table_action = QAction(
+            "Upload Measurement Table", parent
+        )
+        self.upload_observable_table_action = QAction(
+            "Upload Observable Table", parent
+        )
+        self.upload_parameter_table_action = QAction(
+            "Upload Parameter Table", parent
+        )
+        self.upload_condition_table_action = QAction(
+            "Upload Condition Table", parent
+        )
+        self.upload_sbml_action = QAction("Upload SBML", parent)
+
+        self.upload_table_menu.addAction(self.upload_measurement_table_action)
+        self.upload_table_menu.addAction(self.upload_observable_table_action)
+        self.upload_table_menu.addAction(self.upload_parameter_table_action)
+        self.upload_table_menu.addAction(self.upload_condition_table_action)
+        self.upload_table_menu.addAction(self.upload_sbml_action)
+
         # Add actions to the File menu
         self.file_menu.addAction(self.open_action)
         self.file_menu.addAction(self.save_action)

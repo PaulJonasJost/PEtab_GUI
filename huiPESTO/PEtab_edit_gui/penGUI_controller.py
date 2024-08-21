@@ -5,6 +5,7 @@ from datetime import datetime
 import tellurium as te
 import libsbml
 from io import BytesIO
+from petab.models.sbml_model import SbmlModel
 import petab.v1 as petab
 from .C import *
 from .utils import ParameterInputDialog, ObservableInputDialog, \
@@ -12,6 +13,7 @@ from .utils import ParameterInputDialog, ObservableInputDialog, \
     ConditionInputDialog, set_dtypes
 from .penGUI_model import PandasTableModel, SbmlViewerModel
 from PySide6.QtCore import Qt
+from pathlib import Path
 
 
 class Controller:
@@ -55,7 +57,8 @@ class Controller:
 
         self.view.finish_button.clicked.connect(self.finish_editing)
         self.view.upload_data_matrix_button.clicked.connect(
-            self.upload_data_matrix)
+            self.upload_data_matrix
+        )
         self.view.reset_to_original_button.clicked.connect(
             self.reset_to_original_model)
         self.models[1].observable_id_changed.connect(
@@ -91,7 +94,82 @@ class Controller:
         task_bar.delete_action.triggered.connect(
             lambda: self.delete_row(table_index=None)
         )
+        # Upload different tables
+        task_bar.upload_measurement_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(0)
+        )
+        task_bar.upload_observable_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(1)
+        )
+        task_bar.upload_parameter_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(2)
+        )
+        task_bar.upload_condition_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(3)
+        )
+        task_bar.upload_sbml_action.triggered.connect(
+            self.upload_and_overwrite_sbml
+        )
 
+    def upload_and_overwrite_table(self, table_index):
+        # Open a file dialog to select the CSV or TSV file
+        file_path, _ = QFileDialog.getOpenFileName(self.view,
+                                                   "Open CSV or TSV", "",
+                                                   "CSV/TSV Files (*.csv *.tsv)")
+        if file_path:
+            # Determine the file extension to choose the correct separator
+            if file_path.endswith('.csv'):
+                separator = ';'
+            elif file_path.endswith('.tsv'):
+                separator = '\t'
+            else:
+                self.view.log_message(
+                    "Unsupported file format. Please upload a CSV or TSV file.",
+                    color="red")
+                return
+
+            # Read the file into a DataFrame
+            try:
+                new_df = pd.read_csv(file_path, sep=separator)
+            except Exception as e:
+                self.view.log_message(f"Failed to read file: {str(e)}",
+                                      color="red")
+                return
+
+            # Overwrite the table with the new DataFrame
+            self.overwrite_table(table_index, new_df)
+
+    def upload_and_overwrite_sbml(self):
+        # Open a file dialog to select an SBML file
+        file_path, _ = QFileDialog.getOpenFileName(self.view, "Open SBML File",
+                                                   "",
+                                                   "SBML Files (*.xml *.sbml)")
+        if file_path:
+            try:
+                # Load the new SBML model from the file
+                new_sbml_model = SbmlModel.from_file(Path(file_path))
+
+                # Overwrite the existing sbml_model in SbmlViewerModel
+                self.sbml_model._sbml_model_original = new_sbml_model
+
+                # Update the SBML text and Antimony text in the view
+                self.sbml_model.sbml_text = libsbml.writeSBMLToString(
+                    self.sbml_model._sbml_model_original.sbml_model.getSBMLDocument()
+                )
+                self.sbml_model.convert_sbml_to_antimony()  # Convert to Antimony text
+
+                self.view.sbml_text_edit.setPlainText(
+                    self.sbml_model.sbml_text)
+                self.view.antimony_text_edit.setPlainText(
+                    self.sbml_model.antimony_text)
+
+                self.log_message(
+                    "SBML model successfully uploaded and overwritten.",
+                    color="green")
+
+            except Exception as e:
+                self.log_message(f"Failed to upload SBML file: {str(e)}",
+                                      color="red")
 
     def upload_data_matrix(self):
         file_name, _ = QFileDialog.getOpenFileName(self.view, "Open Data Matrix", "", "CSV Files (*.csv);;TSV Files (*.tsv)")
@@ -313,7 +391,6 @@ class Controller:
         if table_index is None:
             table_index = self.view.get_current_table_index()
         table_view = self.view.tables[table_index]
-        print(selected_rows)
         model = self.models[table_index]
         selection_model = table_view.selectionModel()
 
@@ -322,7 +399,6 @@ class Controller:
             selected_rows = [index.row() for index in selected_indexes]
 
         if not selected_rows:
-            print("No rows selected")
             return
 
         for row in sorted(selected_rows, reverse=True):
@@ -457,16 +533,30 @@ class Controller:
                     self.view.close()
 
     def update_antimony_from_sbml(self):
-        self.log_message("Converting SBML to Antimony", color="green")
         self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
-        self.sbml_model.convert_sbml_to_antimony()
+        try:
+            self.sbml_model.convert_sbml_to_antimony()
+        except Exception as e:
+            self.log_message(
+                f"Failed to convert SBML to Antimony: {str(e)}",
+                color="red"
+            )
+            return
+        self.log_message("Converting SBML to Antimony", color="green")
         self.view.antimony_text_edit.setPlainText(
             self.sbml_model.antimony_text)
 
     def update_sbml_from_antimony(self):
-        self.log_message("Converting Antimony to SBML", color="green")
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
-        self.sbml_model.convert_antimony_to_sbml()
+        try:
+            self.sbml_model.convert_antimony_to_sbml()
+        except Exception as e:
+            self.log_message(
+                f"Failed to convert Antimony to SBML: {str(e)}",
+                color="red"
+            )
+            return
+        self.log_message("Converting Antimony to SBML", color="green")
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
 
     def reset_to_original_model(self):
@@ -512,3 +602,12 @@ class Controller:
         full_message = f"[{timestamp}]\t <span style='color:{color};'" \
                        f">{message}</span>"
         self.view.logger.append(full_message)
+
+    def overwrite_table(self, table_index, new_df):
+        """Overwrite the data in the table with the new data frame."""
+        self.models[table_index]._data_frame = new_df
+        self.models[table_index].layoutChanged.emit()
+        self.log_message(
+            f"Overwrote the {self.models[table_index].table_type} table with new data.",
+            color="green"
+        )
