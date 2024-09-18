@@ -1,13 +1,11 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
+from PySide6.QtWidgets import QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
     QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser
-from PySide6.QtCore import Qt, QEvent
-from PySide6.QtGui import QAction, QShortcut, QKeySequence, QCursor
-import sys
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 from .C import CONFIG
 from .utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
-from .penGUI_model import SbmlViewerModel
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.pyplot as plt
 
