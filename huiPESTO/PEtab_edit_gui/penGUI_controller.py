@@ -6,11 +6,11 @@ import tellurium as te
 import libsbml
 from io import BytesIO
 import petab.v1 as petab
-from .C import *
+from .C import MEASUREMENT_COLUMNS, OBSERVABLE_COLUMNS, PARAMETER_COLUMNS, CONDITION_COLUMNS
 from .utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
     ConditionInputDialog, set_dtypes
-from .penGUI_model import PandasTableModel, SbmlViewerModel
+from .penGUI_model import PandasTableModel, SbmlViewerModel, FilterableTableModel
 from PySide6.QtCore import Qt
 
 
@@ -31,6 +31,16 @@ class Controller:
             PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter", self),
             PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition", self)
         ]
+        self.filterable_models = [
+            FilterableTableModel(self.models[0]),
+            FilterableTableModel(self.models[1]),
+            FilterableTableModel(self.models[2]),
+            FilterableTableModel(self.models[3])
+        ]
+        for table_view, filterable_model in zip(
+            self.view.tables, self.filterable_models
+        ):
+            filterable_model.setView(table_view)
         self.sbml_model = SbmlViewerModel(sbml_model=sbml_model)
         # set the text of the SBML and Antimony model
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
@@ -47,7 +57,7 @@ class Controller:
 
     def setup_connections(self):
         for i, table_view in enumerate(self.view.tables):
-            table_view.setModel(self.models[i])
+            table_view.setModel(self.filterable_models[i])
             self.view.add_row_buttons[i].clicked.connect(
                 lambda _, x=i: self.add_row(x))
             self.view.add_column_buttons[i].clicked.connect(
@@ -316,6 +326,7 @@ class Controller:
         self.update_plot()
 
     def update_plot(self):
+        # breakpoint()
         selection_model = self.view.tables[0].selectionModel()
         indexes = selection_model.selectedIndexes()
 
@@ -405,7 +416,6 @@ class Controller:
             with zipfile.ZipFile(buffer, 'w') as zip_file:
                 # Save each data frame to a CSV file in the zip archive
                 for i, model in enumerate(self.models):
-                    table_name = list(self.allowed_columns.keys())[i]
                     csv_data = model._data_frame.to_csv(index=False)
                     zip_file.writestr(f"{model.table_type}.csv", csv_data)
 

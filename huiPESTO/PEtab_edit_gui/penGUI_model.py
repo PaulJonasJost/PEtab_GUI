@@ -1,7 +1,6 @@
-import pandas as pd
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal, \
-    QObject
-from PySide6.QtWidgets import QMessageBox
+    QObject, QSortFilterProxyModel, QPoint
+from PySide6.QtWidgets import QMessageBox, QMenu, QCheckBox, QWidgetAction, QDialogButtonBox
 from PySide6.QtGui import QColor
 import petab.v1 as petab
 import tellurium as te
@@ -258,6 +257,105 @@ class PandasTableModel(QAbstractTableModel):
         else:
             return
         dialog.exec()
+
+
+class FilterableTableModel(QSortFilterProxyModel):
+    """A Custom filter model.
+
+    This model gets a filter when clicked on the columns head which prompts
+    a selection of the unique values in the column to filter on. Largely
+    attributed and adpated from an answer here
+    https://stackoverflow.com/questions/41764448/how-to-use-filter-option-in-qtablewidget
+    """
+    def __init__(self, source_model: PandasTableModel, parent=None):
+        super().__init__(parent)
+        # Set case-insensitive filtering (optional)
+        self.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.setSourceModel(source_model)
+        self.headers = [
+            self.sourceModel().headerData(i, Qt.Horizontal)
+            for i in range(self.sourceModel().columnCount())
+        ]
+        self.table_view = None
+
+    def slotSelect(self, state):
+        for checkbox in self.checkBoxs:
+            checkbox.setChecked(Qt.Checked == state)
+
+    def on_column_click_filter(self, index):
+        # self.clearFilter()
+        if self.table_view is None:
+            return
+        self.menu = QMenu()
+        self.col = index
+
+        data_unique = []
+
+        self.checkBoxs = []
+
+        checkBox = QCheckBox("Select all", self.menu)
+        checkableAction = QWidgetAction(self.menu)
+        checkableAction.setDefaultWidget(checkBox)
+        self.menu.addAction(checkableAction)
+        checkBox.setChecked(True)
+        checkBox.stateChanged.connect(self.slotSelect)
+
+        for i in range(self.sourceModel().rowCount()):
+            cell = self.sourceModel().index(i, index)
+            item = self.sourceModel().data(cell, Qt.DisplayRole)
+            if item not in data_unique:
+                data_unique.append(item)
+                checkBox = QCheckBox(item, self.menu)
+                checkBox.setChecked(True)
+                checkableAction = QWidgetAction(self.menu)
+                checkableAction.setDefaultWidget(checkBox)
+                self.menu.addAction(checkableAction)
+                self.checkBoxs.append(checkBox)
+
+        btn = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self.menu)
+        btn.accepted.connect(self.menuClose)
+        btn.rejected.connect(self.menu.close)
+        checkableAction = QWidgetAction(self.menu)
+        checkableAction.setDefaultWidget(btn)
+        self.menu.addAction(checkableAction)
+
+        headerPos = self.table_view.mapToGlobal(self.horizontalHeader.pos())
+
+        posY = headerPos.y() + self.horizontalHeader.height()
+        posX = headerPos.x() + self.horizontalHeader.sectionPosition(index)
+        self.menu.exec_(QPoint(posX, posY))
+
+    def menuClose(self):
+        self.keywords[self.col] = []
+        for element in self.checkBoxs:
+            if element.isChecked():
+                self.keywords[self.col].append(element.text())
+        self.filterdata()
+        self.menu.close()
+
+    def filterdata(self):
+        columnsShow = dict([(i, True) for i in range(self.sourceModel().rowCount())])
+
+        for i in range(self.sourceModel().rowCount()):
+            for j in range(self.sourceModel().columnCount()):
+                cell = self.sourceModel().index(i, j)
+                item = self.sourceModel().data(cell, Qt.DisplayRole)
+                if self.keywords[j]:
+                    if item not in self.keywords[j]:
+                        columnsShow[i] = False
+        for key, value in columnsShow.items():
+            self.table_view.setRowHidden(key, not value)
+
+    def setView(self, view):
+        self.table_view = view
+        self.horizontalHeader = self.table_view.horizontalHeader()
+        self.horizontalHeader.sectionClicked.connect(self.on_column_click_filter)
+        self.keywords = dict(
+            [(i, []) for i in range(self.sourceModel().columnCount())])
+        self.checkBoxs = []
+        self.col = None
 
 
 class SbmlViewerModel(QObject):
