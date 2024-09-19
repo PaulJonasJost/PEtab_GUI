@@ -317,6 +317,10 @@ class MainWindow(QMainWindow):
         splitter.addWidget(antimony_widget)
         layout.addWidget(splitter)
 
+    def open_find_replace_dialog(self):
+        dialog = FindReplaceDialog(self)
+        dialog.exec()
+
     def closeEvent(self, event):
         if self.controller.unsaved_changes:
             # Show a message box asking whether to save unsaved changes
