@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
     QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser, \
-    QInputDialog
+    QInputDialog, QMessageBox
 from PySide6.QtCore import Qt, QEvent, QModelIndex
 from PySide6.QtGui import QAction, QShortcut, QKeySequence, QCursor
 import sys
@@ -11,6 +11,7 @@ from .utils import FindReplaceDialog, SyntaxHighlighter, PlotWidget
 from .penGUI_model import SbmlViewerModel
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.pyplot as plt
+from .task_bar import TaskBar
 
 
 class MainWindow(QMainWindow):
@@ -24,11 +25,10 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-
-        # Replace the main layout with a QSplitter
         self.splitter = QSplitter(Qt.Vertical, central_widget)
 
         # Initialize tabs and buttons
+        self.task_bar = TaskBar(self)
         self.init_tabs()
         self.init_buttons()
 
@@ -115,6 +115,17 @@ class MainWindow(QMainWindow):
         for i in range(2):
             self.grid_layout.setRowStretch(i, 1)
             self.grid_layout.setColumnStretch(i, 1)
+
+    def get_current_table_index(self):
+        # Choose the table that has focus and has a selection (blue highlight)
+        for index, table_view in enumerate(self.tables):
+            if table_view.hasFocus() and table_view.selectionModel().hasSelection():
+                return index
+        self.controller.log_message(
+            "No table was found active.",
+            color="orange"
+        )
+        return None
 
     def create_table_frame(self, index, label_text="", include_stacked_widget=False):
         frame = QFrame()
@@ -305,3 +316,25 @@ class MainWindow(QMainWindow):
         splitter.addWidget(sbml_widget)
         splitter.addWidget(antimony_widget)
         layout.addWidget(splitter)
+
+    def closeEvent(self, event):
+        if self.controller.unsaved_changes:
+            # Show a message box asking whether to save unsaved changes
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have unsaved changes. Do you want to save them before closing?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Save
+            )
+
+            if reply == QMessageBox.Save:
+                self.controller.save_model()
+                event.accept()  # Close the window after saving
+            elif reply == QMessageBox.Discard:
+                event.accept()  # Close the window without saving
+            else:
+                event.ignore()  # Do not close the window
+        else:
+            # No unsaved changes, proceed with closing
+            event.accept()
