@@ -2,14 +2,17 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
 from PySide6.QtGui import QShortcut, QKeySequence
 import pandas as pd
 import zipfile
+from datetime import datetime
 import tellurium as te
 import libsbml
 from io import BytesIO
-from C import *
-from utils import ParameterInputDialog, ObservableInputDialog, \
+import petab.v1 as petab
+from .C import *
+from .utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
     ConditionInputDialog, set_dtypes, FindReplaceDialog
-from penGUI_model import PandasTableModel, SbmlViewerModel
+from .penGUI_model import PandasTableModel, SbmlViewerModel
+from PySide6.QtCore import Qt
 
 
 class Controller:
@@ -24,12 +27,10 @@ class Controller:
         ]
 
         self.models = [
-            PandasTableModel(_data_frames[0], MEASUREMENT_COLUMNS,
-                             "measurement"),
-            PandasTableModel(_data_frames[1], OBSERVABLE_COLUMNS,
-                             "observable"),
-            PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter"),
-            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition")
+            PandasTableModel(_data_frames[0], MEASUREMENT_COLUMNS, "measurement", self),
+            PandasTableModel(_data_frames[1], OBSERVABLE_COLUMNS, "observable", self),
+            PandasTableModel(_data_frames[2], PARAMETER_COLUMNS, "parameter", self),
+            PandasTableModel(_data_frames[3], CONDITION_COLUMNS, "condition", self)
         ]
         self.sbml_model = SbmlViewerModel(sbml_model=sbml_model)
         # set the text of the SBML and Antimony model
@@ -64,16 +65,23 @@ class Controller:
     def setup_connections(self):
         for i, table_view in enumerate(self.view.tables):
             table_view.setModel(self.models[i])
-            self.view.add_row_buttons[i].clicked.connect(lambda _, x=i: self.add_row(x))
-            self.view.add_column_buttons[i].clicked.connect(lambda _, x=i: self.add_column(x))
+            self.view.add_row_buttons[i].clicked.connect(
+                lambda _, x=i: self.add_row(x))
+            self.view.add_column_buttons[i].clicked.connect(
+                lambda _, x=i: self.add_column(x))
 
         self.view.finish_button.clicked.connect(self.finish_editing)
-        self.view.upload_data_matrix_button.clicked.connect(self.upload_data_matrix)
-        self.view.reset_to_original_button.clicked.connect(self.reset_to_original_model)
-        self.models[1].observable_id_changed.connect(self.handle_observable_id_change)
+        self.view.upload_data_matrix_button.clicked.connect(
+            self.upload_data_matrix)
+        self.view.reset_to_original_button.clicked.connect(
+            self.reset_to_original_model)
+        self.models[1].observable_id_changed.connect(
+            self.handle_observable_id_change)
         self.view.tables[0].selectionModel().selectionChanged.connect(
             self.handle_selection_changed
         )
+        self.models[0].dataChanged.connect(
+            self.handle_data_changed)  # Connect dataChanged signal
 
         self.view.forward_sbml_button.clicked.connect(
             self.update_antimony_from_sbml
@@ -100,12 +108,19 @@ class Controller:
             self.populate_tables_from_data_matrix(data_matrix, condition_id)
 
         except Exception as e:
-            QMessageBox.critical(self.view, "Error", f"An error occurred while processing the file: {str(e)}")
+            self.log_message(
+                f"An error occurred while uploading the data matrix: {str(e)}",
+                color="red"
+            )
 
     def load_data_matrix(self, file_name):
         data_matrix = pd.read_csv(file_name, delimiter='\t' if file_name.endswith('.tsv') else ',')
         if not any(col in data_matrix.columns for col in ["Time", "time", "t"]):
-            QMessageBox.warning(self.view, "Invalid File", "The file must contain a 'Time' column.")
+            self.log_message(
+                "Invalid File, the file must contain a 'Time' column. "
+                "Please ensure that the file contains a 'Time'",
+                color="red"
+                )
             return None
 
         time_column = next(col for col in ["Time", "time", "t"] if col in data_matrix.columns)
@@ -279,6 +294,11 @@ class Controller:
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
         if reply == QMessageBox.Yes:
+            self.log_message(
+                f"Renaming observable '{old_id}' to '{new_id}' in all "
+                f"measurements",
+                color="green"
+            )
             self.rename_observable_in_measurements(old_id, new_id)
 
     def rename_observable_in_measurements(self, old_id, new_id):
@@ -289,40 +309,95 @@ class Controller:
                 measurement_model._data_frame.at[row, "observableId"] = new_id
         measurement_model.layoutChanged.emit()
 
-    def delete_row(self, table_index):
+    def delete_row(self, table_index, selected_rows=None):
         table_view = self.view.tables[table_index]
         model = self.models[table_index]
         selection_model = table_view.selectionModel()
-        selected_indexes = selection_model.selectedRows()
 
-        if not selected_indexes:
+        if selected_rows is None:
+            selected_indexes = selection_model.selectedRows()
+            selected_rows = [index.row() for index in selected_indexes]
+
+        if not selected_rows:
             return
 
-        for index in sorted(selected_indexes):
-            model._data_frame.drop(index.row(), inplace=True)
+        for row in sorted(selected_rows, reverse=True):
+            self.log_message(
+                f"Deleted row {row} from {model.table_type} table."
+                f" Data: {model._data_frame.iloc[row].to_dict()}",
+                color="orange"
+            )
+            model._data_frame.drop(row, inplace=True)
+        model._data_frame.reset_index(drop=True, inplace=True)
+
         model.layoutChanged.emit()
 
-    def handle_selection_changed(self, selected, deselected):
-        indexes = selected.indexes()
-        if indexes:
-            row = indexes[0].row()
-            observable_id = self.models[0]._data_frame.iloc[row]["observableId"]
-            selected_point = {
-                "x": self.models[0]._data_frame.iloc[row]["time"],
-                "y": self.models[0]._data_frame.iloc[row]["measurement"]
-            }
-            self.update_plot(observable_id, selected_point)
+    def handle_selection_changed(self):
+        self.update_plot()
 
-    def update_plot(self, observable_id, selected_point):
+    def update_plot(self):
+        selection_model = self.view.tables[0].selectionModel()
+        indexes = selection_model.selectedIndexes()
+
+        selected_points = {}
+        if indexes:
+            for index in indexes:
+                row = index.row()
+                observable_id = self.models[0]._data_frame.iloc[row][
+                    "observableId"]
+                if observable_id not in selected_points:
+                    selected_points[observable_id] = []
+                selected_points[observable_id].append({
+                    "x": self.models[0]._data_frame.iloc[row]["time"],
+                    "y": self.models[0]._data_frame.iloc[row]["measurement"]
+                })
+
         measurement_data = self.models[0]._data_frame
-        observable_data = measurement_data[measurement_data["observableId"] == observable_id]
         plot_data = {
-            "x": observable_data["time"].tolist(),
-            "y": observable_data["measurement"].tolist(),
-            "selected_point": selected_point
+            "all_data": [],
+            "selected_points": selected_points
         }
+        for observable_id in selected_points.keys():
+            observable_data = measurement_data[
+                measurement_data["observableId"] == observable_id]
+            plot_data["all_data"].append({
+                "observable_id": observable_id,
+                "x": observable_data["time"].tolist(),
+                "y": observable_data["measurement"].tolist()
+            })
+
         self.view.update_visualization(plot_data)
 
+    def handle_data_changed(self, top_left, bottom_right, roles):
+        if not roles or Qt.DisplayRole in roles:
+            self.update_plot()
+
+    def update_plot_based_on_current_selection(self):
+        selection_model = self.view.tables[0].selectionModel()
+        indexes = selection_model.selectedIndexes()
+        if indexes:
+            selected_points = {}
+            for index in indexes:
+                row = index.row()
+                observable_id = self.models[0]._data_frame.iloc[row][
+                    "observableId"]
+                if observable_id not in selected_points:
+                    selected_points[observable_id] = []
+                selected_points[observable_id].append({
+                    "x": self.models[0]._data_frame.iloc[row]["time"],
+                    "y": self.models[0]._data_frame.iloc[row]["measurement"]
+                })
+            self.update_plot(selected_points)
+
+    # def find_text(self, text):
+    #     for model in self.models:
+    #         matching_cells = model._data_frame.map(
+    #             lambda x: text in str(x))
+    #         matching_indices = matching_cells.stack().index[
+    #             matching_cells.stack()]
+    #         if not matching_indices.empty:
+    #             for row, col in matching_indices:
+    #                 print(f"Found '{text}' in row {row}, column {col}")
     def open_find_replace_dialog(self):
         current_tab = self.view.tabs.currentIndex()
         if current_tab == 0:
@@ -338,6 +413,10 @@ class Controller:
         dialog.exec()
 
     def replace_text(self, find_text, replace_text, selected_models):
+        self.log_message(
+            f"Replacing '{find_text}' with '{replace_text}' in selected tables",
+            color="green"
+        )
         for index in selected_models:
             model = self.models[index]
             model._data_frame.replace(find_text, replace_text, inplace=True)
@@ -387,20 +466,58 @@ class Controller:
                 self.view.close()
 
     def update_antimony_from_sbml(self):
+        self.log_message("Converting SBML to Antimony", color="green")
         self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
         self.sbml_model.convert_sbml_to_antimony()
         self.view.antimony_text_edit.setPlainText(
             self.sbml_model.antimony_text)
 
     def update_sbml_from_antimony(self):
+        self.log_message("Converting Antimony to SBML", color="green")
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
         self.sbml_model.convert_antimony_to_sbml()
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
 
     def reset_to_original_model(self):
+        self.log_message(
+            "Resetting the model to the original SBML and Antimony text",
+            color="orange"
+        )
         self.sbml_model.sbml_text = libsbml.writeSBMLToString(
             self.sbml_model._sbml_model_original.sbml_model.getSBMLDocument()
         )
         self.sbml_model.antimony_text = te.sbmlToAntimony(self.sbml_model.sbml_text)
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
         self.view.antimony_text_edit.setPlainText(self.sbml_model.antimony_text)
+
+    def check_petab_lint(self, row_data, table_type):
+        if table_type == "measurement":
+            observable_df = self.models[1]._data_frame
+            return petab.check_measurement_df(row_data,
+                                              observable_df=observable_df)
+        elif table_type == "observable":
+            return petab.check_observable_df(
+                row_data.set_index("observableId"))
+        elif table_type == "parameter":
+            model = self.sbml_model
+            observable_df = self.models[1]._data_frame
+            measurement_df = self.models[0]._data_frame
+            condition_df = self.models[3]._data_frame
+            return petab.check_parameter_df(row_data.set_index("parameterId"),
+                                            model=model,
+                                            observable_df=observable_df,
+                                            measurement_df=measurement_df,
+                                            condition_df=condition_df)
+        elif table_type == "condition":
+            model = self.sbml_model
+            observable_df = self.models[1]._data_frame
+            return petab.check_condition_df(row_data.set_index("conditionId"),
+                                            model=model,
+                                            observable_df=observable_df)
+        return True
+
+    def log_message(self, message, color="black"):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        full_message = f"[{timestamp}]\t <span style='color:{color};'" \
+                       f">{message}</span>"
+        self.view.logger.append(full_message)
