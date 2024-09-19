@@ -262,6 +262,11 @@ class MainWindow(QMainWindow):
             lambda: self.controller.delete_row(table_index, rows_to_select)
         )
         context_menu.addAction(delete_action)
+        # add column
+        add_column_action = QAction("Add Column", self)
+        add_column_action.triggered.connect(
+            lambda: self.controller.add_column(table_index)
+        )
 
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
         table_view.setSelectionMode(original_selection_mode)
