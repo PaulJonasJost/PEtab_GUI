@@ -117,6 +117,19 @@ class Controller:
         task_bar.delete_action.triggered.connect(
             lambda: self.delete_row(table_index=None)
         )
+        # Add columns
+        task_bar.add_c_meas_action.triggered.connect(
+            lambda: self.add_column(0)
+        )
+        task_bar.add_c_obs_action.triggered.connect(
+            lambda: self.add_column(1)
+        )
+        task_bar.add_c_para_action.triggered.connect(
+            lambda: self.add_column(2)
+        )
+        task_bar.add_c_cond_action.triggered.connect(
+            lambda: self.add_column(3)
+        )
         # Upload different tables
         task_bar.upload_measurement_table_action.triggered.connect(
             lambda: self.upload_and_overwrite_table(0)

@@ -278,6 +278,7 @@ class MainWindow(QMainWindow):
         add_column_action.triggered.connect(
             lambda: self.controller.add_column(table_index)
         )
+        context_menu.addAction(add_column_action)
 
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
         table_view.setSelectionMode(original_selection_mode)

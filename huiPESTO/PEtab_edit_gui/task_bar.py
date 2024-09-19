@@ -55,7 +55,17 @@ class TaskBar:
         # Create actions for the Edit menu
         self.find_replace_action = QAction("Find/Replace", parent)
         self.delete_action = QAction("Delete Rows", parent)
+        self.add_column_menu = QMenu("Add Column", parent)
+        self.add_c_meas_action = QAction("Add Column to Measurement Table", parent)
+        self.add_c_obs_action = QAction("Add Column to Observable Table", parent)
+        self.add_c_para_action = QAction("Add Column to Parameter Table", parent)
+        self.add_c_cond_action = QAction("Add Column to Condition Table", parent)
+        self.add_column_menu.addAction(self.add_c_meas_action)
+        self.add_column_menu.addAction(self.add_c_obs_action)
+        self.add_column_menu.addAction(self.add_c_para_action)
+        self.add_column_menu.addAction(self.add_c_cond_action)
 
         # Add actions to the Edit menu
         self.edit_menu.addAction(self.find_replace_action)
         self.edit_menu.addAction(self.delete_action)
+        self.edit_menu.addMenu(self.add_column_menu)
