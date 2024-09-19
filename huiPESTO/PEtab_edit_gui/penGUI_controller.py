@@ -130,6 +130,19 @@ class Controller:
         task_bar.add_c_cond_action.triggered.connect(
             lambda: self.add_column(3)
         )
+        # Add rows
+        task_bar.add_r_meas_action.triggered.connect(
+            lambda: self.add_row(0)
+        )
+        task_bar.add_r_obs_action.triggered.connect(
+            lambda: self.add_row(1)
+        )
+        task_bar.add_r_para_action.triggered.connect(
+            lambda: self.add_row(2)
+        )
+        task_bar.add_r_cond_action.triggered.connect(
+            lambda: self.add_row(3)
+        )
         # Upload different tables
         task_bar.upload_measurement_table_action.triggered.connect(
             lambda: self.upload_and_overwrite_table(0)

@@ -268,6 +268,11 @@ class MainWindow(QMainWindow):
         rows_to_select.add(index.row())
 
         context_menu = QMenu(self)
+        add_row_action = QAction("Add Row", self)
+        add_row_action.triggered.connect(
+            lambda: self.controller.add_row(table_index)
+        )
+        context_menu.addAction(add_row_action)
         delete_action = QAction("Delete Row", self)
         delete_action.triggered.connect(
             lambda: self.controller.delete_row(table_index, rows_to_select)
