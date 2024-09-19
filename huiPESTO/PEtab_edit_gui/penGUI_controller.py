@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import QInputDialog, QMessageBox, QFileDialog
+from PySide6.QtGui import QShortcut, QKeySequence
 import pandas as pd
 import zipfile
 from datetime import datetime
@@ -11,7 +12,7 @@ import petab.v1 as petab
 from .C import *
 from .utils import ParameterInputDialog, ObservableInputDialog, \
     MeasurementInputDialog, ObservableFormulaInputDialog, \
-    ConditionInputDialog, set_dtypes
+    ConditionInputDialog, set_dtypes, FindReplaceDialog
 from .penGUI_model import PandasTableModel, SbmlViewerModel
 from PySide6.QtCore import Qt
 from pathlib import Path
@@ -39,7 +40,6 @@ class Controller:
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
         self.view.antimony_text_edit.setPlainText(self.sbml_model.antimony_text)
         self.view.controller = self
-        self.setup_connections()
 
         self.allowed_columns = {
             0: MEASUREMENT_COLUMNS,
@@ -48,6 +48,23 @@ class Controller:
             3: CONDITION_COLUMNS
         }
         self.unsaved_changes = False
+
+        self.petab_checkbox_states = {
+            "measurement": False,
+            "observable": False,
+            "parameter": False,
+            "condition": False
+        }
+        self.sbml_checkbox_states = {
+            "sbml": False,
+            "antimony": False
+        }
+
+        self.find_replace_shortcut = QShortcut(
+            QKeySequence("Ctrl+R"),
+            self.view
+        )
+        self.setup_connections()
 
     def setup_connections(self):
         for i, table_view in enumerate(self.view.tables):
@@ -76,6 +93,9 @@ class Controller:
         )
         self.view.forward_antimony_button.clicked.connect(
             self.update_sbml_from_antimony
+        )
+        self.find_replace_shortcut.activated.connect(
+            self.open_find_replace_dialog
         )
         self.setup_task_bar()
 
@@ -538,6 +558,19 @@ class Controller:
     #         if not matching_indices.empty:
     #             for row, col in matching_indices:
     #                 print(f"Found '{text}' in row {row}, column {col}")
+    def open_find_replace_dialog(self):
+        current_tab = self.view.tabs.currentIndex()
+        if current_tab == 0:
+            dialog = FindReplaceDialog(
+                self.view, mode="petab",
+                checkbox_states=self.petab_checkbox_states
+            )
+        elif current_tab == 1:
+            dialog = FindReplaceDialog(
+                self.view, mode="sbml",
+                checkbox_states=self.sbml_checkbox_states
+            )
+        dialog.exec()
 
     def replace_text(self, find_text, replace_text, selected_models):
         self.log_message(
