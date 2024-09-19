@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
 
         self.tables = []
         self.add_row_buttons = []
-        self.add_column_buttons = []
+        self.add_column_button = None
         self.stacked_widgets = []
 
         for i in range(3):
@@ -149,11 +149,12 @@ class MainWindow(QMainWindow):
 
         button_layout = QHBoxLayout()
         add_row_button = QPushButton("Add Row")
-        add_column_button = QPushButton("Add Column")
         self.add_row_buttons.append(add_row_button)
-        self.add_column_buttons.append(add_column_button)
         button_layout.addWidget(add_row_button)
-        button_layout.addWidget(add_column_button)
+        if index == 3:  # Condition table keeps column
+            add_column_button = QPushButton("Add Column")
+            self.add_column_button = add_column_button
+            button_layout.addWidget(add_column_button)
 
         if include_stacked_widget:
             stacked_widget = QStackedWidget()

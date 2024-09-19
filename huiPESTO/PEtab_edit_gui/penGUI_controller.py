@@ -67,8 +67,9 @@ class Controller:
             table_view.setModel(self.models[i])
             self.view.add_row_buttons[i].clicked.connect(
                 lambda _, x=i: self.add_row(x))
-            self.view.add_column_buttons[i].clicked.connect(
-                lambda _, x=i: self.add_column(x))
+            if i == 3:
+                self.view.add_column_button.clicked.connect(
+                    lambda _, x=i: self.add_column(x))
 
         self.view.finish_button.clicked.connect(self.finish_editing)
         self.view.upload_data_matrix_button.clicked.connect(
@@ -280,7 +281,7 @@ class Controller:
 
     def add_column_to_model(self, table_index, column_name):
         allowed_columns = self.allowed_columns[table_index]
-        if column_name in allowed_columns:
+        if column_name in allowed_columns or table_index == 3:
             column_type = allowed_columns[column_name]
             default_value = "" if column_type == "STRING" else 0
             self.models[table_index].add_column(column_name, default_value)
