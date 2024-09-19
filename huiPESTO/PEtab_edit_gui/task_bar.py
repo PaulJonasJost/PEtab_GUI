@@ -17,7 +17,7 @@ class TaskBar:
         # Create actions for the File menu
         self.open_action = QAction("Open", parent)
         self.save_action = QAction("Save", parent)
-        self.exit_action = QAction("Save and Close", parent)
+        self.exit_action = QAction("Close", parent)
 
         # Create the Upload Table submenu
         self.upload_table_menu = QMenu("Upload Tables or SBML", parent)

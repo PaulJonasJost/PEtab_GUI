@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
-    QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser
+    QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser, QMessageBox
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QAction, QShortcut, QKeySequence, QCursor
 import sys
@@ -319,3 +319,25 @@ class MainWindow(QMainWindow):
         splitter.addWidget(sbml_widget)
         splitter.addWidget(antimony_widget)
         layout.addWidget(splitter)
+
+    def closeEvent(self, event):
+        if self.controller.unsaved_changes:
+            # Show a message box asking whether to save unsaved changes
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have unsaved changes. Do you want to save them before closing?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Save
+            )
+
+            if reply == QMessageBox.Save:
+                self.controller.save_model()
+                event.accept()  # Close the window after saving
+            elif reply == QMessageBox.Discard:
+                event.accept()  # Close the window without saving
+            else:
+                event.ignore()  # Do not close the window
+        else:
+            # No unsaved changes, proceed with closing
+            event.accept()

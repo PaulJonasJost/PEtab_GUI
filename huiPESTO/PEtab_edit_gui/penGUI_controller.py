@@ -47,6 +47,7 @@ class Controller:
             2: PARAMETER_COLUMNS,
             3: CONDITION_COLUMNS
         }
+        self.unsaved_changes = False
 
     def setup_connections(self):
         for i, table_view in enumerate(self.view.tables):
@@ -56,7 +57,7 @@ class Controller:
             self.view.add_column_buttons[i].clicked.connect(
                 lambda _, x=i: self.add_column(x))
 
-        self.view.finish_button.clicked.connect(self.finish_editing)
+        self.view.finish_button.clicked.connect(self.save_model)
         self.view.upload_data_matrix_button.clicked.connect(
             self.upload_data_matrix
         )
@@ -85,11 +86,11 @@ class Controller:
         task_bar.find_replace_action.triggered.connect(self.view.open_find_replace_dialog)
         # Save
         task_bar.save_action.triggered.connect(
-            lambda: self.finish_editing(maybe_close_after=False)
+            self.save_model
         )
-        # Save and Close
+        # Close
         task_bar.exit_action.triggered.connect(
-            lambda: self.finish_editing(maybe_close_after=True)
+            self.view.close
         )
         # Delete Rows
         task_bar.delete_action.triggered.connect(
@@ -154,6 +155,7 @@ class Controller:
                     "All files uploaded successfully from the YAML configuration.",
                     color="green"
                 )
+                self.unsaved_changes = False
 
             except Exception as e:
                 self.log_message(
@@ -235,6 +237,7 @@ class Controller:
 
             condition_id = "cond1"
             self.populate_tables_from_data_matrix(data_matrix, condition_id)
+            self.unsaved_changes = True
 
         except Exception as e:
             self.log_message(
@@ -436,6 +439,7 @@ class Controller:
         for row in range(rows):
             if measurement_model._data_frame.at[row, "observableId"] == old_id:
                 measurement_model._data_frame.at[row, "observableId"] = new_id
+        self.unsaved_changes = True
         measurement_model.layoutChanged.emit()
 
     def delete_row(self, table_index=None, selected_rows=None):
@@ -460,7 +464,7 @@ class Controller:
             )
             model._data_frame.drop(row, inplace=True)
         model._data_frame.reset_index(drop=True, inplace=True)
-
+        self.unsaved_changes = True
         model.layoutChanged.emit()
 
     def handle_selection_changed(self):
@@ -539,8 +543,9 @@ class Controller:
             model = self.models[index]
             model._data_frame.replace(find_text, replace_text, inplace=True)
             model.layoutChanged.emit()
+        self.unsaved_changes = True
 
-    def finish_editing(self, maybe_close_after: bool = True):
+    def save_model(self):
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(self.view,
                                                    "Save Project",
@@ -573,16 +578,6 @@ class Controller:
                 f"Project saved successfully to {file_name}"
             )
 
-            if maybe_close_after:
-                reply = QMessageBox.question(
-                    self.view, "Close Application",
-                    "Do you want to close the application?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
-                )
-                if reply == QMessageBox.Yes:
-                    self.view.close()
-
     def update_antimony_from_sbml(self):
         self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
         try:
@@ -596,6 +591,7 @@ class Controller:
         self.log_message("Converting SBML to Antimony", color="green")
         self.view.antimony_text_edit.setPlainText(
             self.sbml_model.antimony_text)
+        self.unsaved_changes = True
 
     def update_sbml_from_antimony(self):
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
@@ -609,6 +605,7 @@ class Controller:
             return
         self.log_message("Converting Antimony to SBML", color="green")
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
+        self.unsaved_changes = True
 
     def reset_to_original_model(self):
         self.log_message(
@@ -662,3 +659,4 @@ class Controller:
             f"Overwrote the {self.models[table_index].table_type} table with new data.",
             color="green"
         )
+        self.unsaved_changes = True
