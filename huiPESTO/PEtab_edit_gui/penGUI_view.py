@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, \
     QTabWidget, QPlainTextEdit, QSplitter, QWidget, QGridLayout, \
     QPushButton, QFrame, QTableView, QHBoxLayout, QMenu, QLabel, \
-    QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser
-from PySide6.QtCore import Qt, QEvent
+    QStackedWidget, QToolButton, QStyle, QAbstractItemView, QTextBrowser, \
+    QInputDialog
+from PySide6.QtCore import Qt, QEvent, QModelIndex
 from PySide6.QtGui import QAction, QShortcut, QKeySequence, QCursor
 import sys
 from .C import CONFIG
@@ -264,10 +265,6 @@ class MainWindow(QMainWindow):
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
         table_view.setSelectionMode(original_selection_mode)
         table_view.setSelectionBehavior(original_selection_behavior)
-
-    def open_find_replace_dialog(self):
-        dialog = FindReplaceDialog(self)
-        dialog.exec()
 
     def setup_sbml_tab(self):
         layout = QVBoxLayout(self.sbml_tab)
