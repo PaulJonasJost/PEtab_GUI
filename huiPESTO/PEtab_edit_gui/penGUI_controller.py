@@ -6,6 +6,8 @@ from datetime import datetime
 import tellurium as te
 import libsbml
 from io import BytesIO
+from petab.models.sbml_model import SbmlModel
+import yaml
 import petab.v1 as petab
 from .C import *
 from .utils import ParameterInputDialog, ObservableInputDialog, \
@@ -13,6 +15,7 @@ from .utils import ParameterInputDialog, ObservableInputDialog, \
     ConditionInputDialog, set_dtypes, FindReplaceDialog
 from .penGUI_model import PandasTableModel, SbmlViewerModel
 from PySide6.QtCore import Qt
+from pathlib import Path
 
 
 class Controller:
@@ -44,6 +47,7 @@ class Controller:
             2: PARAMETER_COLUMNS,
             3: CONDITION_COLUMNS
         }
+        self.unsaved_changes = False
 
         self.petab_checkbox_states = {
             "measurement": False,
@@ -71,9 +75,10 @@ class Controller:
                 self.view.add_column_button.clicked.connect(
                     lambda _, x=i: self.add_column(x))
 
-        self.view.finish_button.clicked.connect(self.finish_editing)
+        self.view.finish_button.clicked.connect(self.save_model)
         self.view.upload_data_matrix_button.clicked.connect(
-            self.upload_data_matrix)
+            self.upload_data_matrix
+        )
         self.view.reset_to_original_button.clicked.connect(
             self.reset_to_original_model)
         self.models[1].observable_id_changed.connect(
@@ -93,6 +98,157 @@ class Controller:
         self.find_replace_shortcut.activated.connect(
             self.open_find_replace_dialog
         )
+        self.setup_task_bar()
+
+    def setup_task_bar(self):
+        """Create connections for the task bar actions."""
+        task_bar = self.view.task_bar
+        # Find and Replace
+        task_bar.find_replace_action.triggered.connect(self.view.open_find_replace_dialog)
+        # Save
+        task_bar.save_action.triggered.connect(
+            self.save_model
+        )
+        # Close
+        task_bar.exit_action.triggered.connect(
+            self.view.close
+        )
+        # Delete Rows
+        task_bar.delete_action.triggered.connect(
+            lambda: self.delete_row(table_index=None)
+        )
+        # Upload different tables
+        task_bar.upload_measurement_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(0)
+        )
+        task_bar.upload_observable_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(1)
+        )
+        task_bar.upload_parameter_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(2)
+        )
+        task_bar.upload_condition_table_action.triggered.connect(
+            lambda: self.upload_and_overwrite_table(3)
+        )
+        task_bar.upload_sbml_action.triggered.connect(
+            self.upload_and_overwrite_sbml
+        )
+        # upload yaml
+        self.view.task_bar.upload_yaml_action.triggered.connect(
+            self.upload_yaml_and_load_files
+        )
+
+    def upload_yaml_and_load_files(self):
+        # Open a file dialog to select the YAML file
+        yaml_path, _ = QFileDialog.getOpenFileName(self.view, "Open YAML File",
+                                                   "",
+                                                   "YAML Files (*.yaml *.yml)")
+        if yaml_path:
+            try:
+                # Load the YAML content
+                with open(yaml_path, 'r') as file:
+                    yaml_content = yaml.safe_load(file)
+
+                # Resolve the directory of the YAML file to handle relative paths
+                yaml_dir = Path(yaml_path).parent
+
+                # Upload SBML model
+                sbml_file_path = yaml_dir / \
+                                 yaml_content['problems'][0]['sbml_files'][0]
+                self.upload_and_overwrite_sbml(sbml_file_path)
+                table_files = [
+                    ('measurement', 0,
+                     yaml_content['problems'][0]['measurement_files'][0]),
+                    ('observable', 1,
+                     yaml_content['problems'][0]['observable_files'][0]),
+                    ('parameter', 2, yaml_content['parameter_file']),
+                    # Assuming parameter_file is in the root
+                    ('condition', 3,
+                     yaml_content['problems'][0]['condition_files'][0])
+                ]
+
+                for table_name, table_index, table_file in table_files:
+                    table_file_path = yaml_dir / table_file
+                    self.upload_and_overwrite_table(table_index,
+                                                    table_file_path)
+
+                self.log_message(
+                    "All files uploaded successfully from the YAML configuration.",
+                    color="green"
+                )
+                self.unsaved_changes = False
+
+            except Exception as e:
+                self.log_message(
+                    f"Failed to upload files from YAML: {str(e)}", color="red"
+                )
+
+    def upload_and_overwrite_table(self, table_index, file_path=None):
+        if not file_path:
+            # Open a file dialog to select the CSV or TSV file
+            file_path, _ = QFileDialog.getOpenFileName(
+                self.view, "Open CSV or TSV", "", "CSV/TSV Files (*.csv *.tsv)"
+            )
+        if file_path:
+
+            # convert the file path to a Path object if it is a string
+            if type(file_path) is str:
+                file_path = Path(file_path)
+
+            # Determine the file extension to choose the correct separator
+            if file_path.suffix == '.csv':
+                separator = ';'
+            elif file_path.suffix == '.tsv':
+                separator = '\t'
+            else:
+                self.view.log_message(
+                    "Unsupported file format. Please upload a CSV or TSV file.",
+                    color="red")
+                return
+
+            # Read the file into a DataFrame
+            try:
+                new_df = pd.read_csv(file_path, sep=separator)
+            except Exception as e:
+                self.view.log_message(f"Failed to read file: {str(e)}",
+                                      color="red")
+                return
+
+            # Overwrite the table with the new DataFrame
+            self.overwrite_table(table_index, new_df)
+
+    def upload_and_overwrite_sbml(self, file_path=None):
+        if not file_path:
+            # Open a file dialog to select an SBML file
+            file_path, _ = QFileDialog.getOpenFileName(
+                self.view, "Open SBML File", "", "SBML Files (*.xml *.sbml)"
+            )
+        if file_path:
+            try:
+                # Load the new SBML model from the file
+                new_sbml_model = SbmlModel.from_file(Path(file_path))
+
+                # Overwrite the existing sbml_model in SbmlViewerModel
+                self.sbml_model._sbml_model_original = new_sbml_model
+
+                # Update the SBML text and Antimony text in the view
+                self.sbml_model.sbml_text = libsbml.writeSBMLToString(
+                    self.sbml_model._sbml_model_original.sbml_model.getSBMLDocument()
+                )
+                self.sbml_model.convert_sbml_to_antimony()  # Convert to Antimony text
+
+                self.view.sbml_text_edit.setPlainText(
+                    self.sbml_model.sbml_text)
+                self.view.antimony_text_edit.setPlainText(
+                    self.sbml_model.antimony_text)
+
+                self.log_message(
+                    "SBML model successfully uploaded and overwritten.",
+                    color="green")
+
+            except Exception as e:
+                self.log_message(f"Failed to upload SBML file: {str(e)}",
+                                      color="red")
 
     def upload_data_matrix(self):
         file_name, _ = QFileDialog.getOpenFileName(self.view, "Open Data Matrix", "", "CSV Files (*.csv);;TSV Files (*.tsv)")
@@ -107,6 +263,7 @@ class Controller:
 
             condition_id = "cond1"
             self.populate_tables_from_data_matrix(data_matrix, condition_id)
+            self.unsaved_changes = True
 
         except Exception as e:
             self.log_message(
@@ -308,15 +465,18 @@ class Controller:
         for row in range(rows):
             if measurement_model._data_frame.at[row, "observableId"] == old_id:
                 measurement_model._data_frame.at[row, "observableId"] = new_id
+        self.unsaved_changes = True
         measurement_model.layoutChanged.emit()
 
-    def delete_row(self, table_index, selected_rows=None):
+    def delete_row(self, table_index=None, selected_rows=None):
+        if table_index is None:
+            table_index = self.view.get_current_table_index()
         table_view = self.view.tables[table_index]
         model = self.models[table_index]
         selection_model = table_view.selectionModel()
 
         if selected_rows is None:
-            selected_indexes = selection_model.selectedRows()
+            selected_indexes = selection_model.selectedIndexes()
             selected_rows = [index.row() for index in selected_indexes]
 
         if not selected_rows:
@@ -330,7 +490,7 @@ class Controller:
             )
             model._data_frame.drop(row, inplace=True)
         model._data_frame.reset_index(drop=True, inplace=True)
-
+        self.unsaved_changes = True
         model.layoutChanged.emit()
 
     def handle_selection_changed(self):
@@ -422,8 +582,9 @@ class Controller:
             model = self.models[index]
             model._data_frame.replace(find_text, replace_text, inplace=True)
             model.layoutChanged.emit()
+        self.unsaved_changes = True
 
-    def finish_editing(self):
+    def save_model(self):
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(self.view,
                                                    "Save Project",
@@ -456,28 +617,34 @@ class Controller:
                 f"Project saved successfully to {file_name}"
             )
 
-            # Ask if the user wants to close the application
-            reply = QMessageBox.question(
-                self.view, "Close Application",
-                "Do you want to close the application?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply == QMessageBox.Yes:
-                self.view.close()
-
     def update_antimony_from_sbml(self):
-        self.log_message("Converting SBML to Antimony", color="green")
         self.sbml_model.sbml_text = self.view.sbml_text_edit.toPlainText()
-        self.sbml_model.convert_sbml_to_antimony()
+        try:
+            self.sbml_model.convert_sbml_to_antimony()
+        except Exception as e:
+            self.log_message(
+                f"Failed to convert SBML to Antimony: {str(e)}",
+                color="red"
+            )
+            return
+        self.log_message("Converting SBML to Antimony", color="green")
         self.view.antimony_text_edit.setPlainText(
             self.sbml_model.antimony_text)
+        self.unsaved_changes = True
 
     def update_sbml_from_antimony(self):
-        self.log_message("Converting Antimony to SBML", color="green")
         self.sbml_model.antimony_text = self.view.antimony_text_edit.toPlainText()
-        self.sbml_model.convert_antimony_to_sbml()
+        try:
+            self.sbml_model.convert_antimony_to_sbml()
+        except Exception as e:
+            self.log_message(
+                f"Failed to convert Antimony to SBML: {str(e)}",
+                color="red"
+            )
+            return
+        self.log_message("Converting Antimony to SBML", color="green")
         self.view.sbml_text_edit.setPlainText(self.sbml_model.sbml_text)
+        self.unsaved_changes = True
 
     def reset_to_original_model(self):
         self.log_message(
@@ -522,3 +689,13 @@ class Controller:
         full_message = f"[{timestamp}]\t <span style='color:{color};'" \
                        f">{message}</span>"
         self.view.logger.append(full_message)
+
+    def overwrite_table(self, table_index, new_df):
+        """Overwrite the data in the table with the new data frame."""
+        self.models[table_index]._data_frame = new_df
+        self.models[table_index].layoutChanged.emit()
+        self.log_message(
+            f"Overwrote the {self.models[table_index].table_type} table with new data.",
+            color="green"
+        )
+        self.unsaved_changes = True

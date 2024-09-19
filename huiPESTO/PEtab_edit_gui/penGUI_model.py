@@ -76,6 +76,7 @@ class PandasTableModel(QAbstractTableModel):
                 self._data_frame.iloc[index.row(), index.column()] = value
                 if old_value != value:
                     self.dataChanged.emit(index, index, [Qt.DisplayRole])
+                    self.controller.unsaved_changes = True
 
             # Validate the row after setting data
             self.validate_changed_cell(index.row(), index.column())
@@ -142,7 +143,10 @@ class PandasTableModel(QAbstractTableModel):
                     value, error_message = validate_value(value, expected_type)
                     if error_message:
                         error_message = f"Column '{key}' expects a value of type {expected_type}, but got '{value}'"
-                        QMessageBox.warning(None, "Input Error", error_message)
+                        self.controller.log_message(
+                            f"Input Error: {error_message}\n Abandoning row addition.",
+                            color="red"
+                        )
                         self.open_dialog_with_values(kwargs, key)
                         self._data_frame.drop(index=new_index, inplace=True)
                         self.layoutChanged.emit()
@@ -179,6 +183,7 @@ class PandasTableModel(QAbstractTableModel):
         # Validate the entire row
         self.validate_new_row(new_index)
         self.layoutChanged.emit()
+        self.controller.unsaved_changes = True
         return True
 
     def validate_new_row(self, row_index):
