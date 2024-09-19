@@ -169,6 +169,11 @@ class Controller:
                 self.view, "Open CSV or TSV", "", "CSV/TSV Files (*.csv *.tsv)"
             )
         if file_path:
+
+            # convert the file path to a Path object if it is a string
+            if type(file_path) is str:
+                file_path = Path(file_path)
+
             # Determine the file extension to choose the correct separator
             if file_path.suffix == '.csv':
                 separator = ';'
