@@ -71,8 +71,9 @@ class Controller:
             table_view.setModel(self.models[i])
             self.view.add_row_buttons[i].clicked.connect(
                 lambda _, x=i: self.add_row(x))
-            self.view.add_column_buttons[i].clicked.connect(
-                lambda _, x=i: self.add_column(x))
+            if i == 3:
+                self.view.add_column_button.clicked.connect(
+                    lambda _, x=i: self.add_column(x))
 
         self.view.finish_button.clicked.connect(self.save_model)
         self.view.upload_data_matrix_button.clicked.connect(
@@ -115,6 +116,32 @@ class Controller:
         # Delete Rows
         task_bar.delete_action.triggered.connect(
             lambda: self.delete_row(table_index=None)
+        )
+        # Add columns
+        task_bar.add_c_meas_action.triggered.connect(
+            lambda: self.add_column(0)
+        )
+        task_bar.add_c_obs_action.triggered.connect(
+            lambda: self.add_column(1)
+        )
+        task_bar.add_c_para_action.triggered.connect(
+            lambda: self.add_column(2)
+        )
+        task_bar.add_c_cond_action.triggered.connect(
+            lambda: self.add_column(3)
+        )
+        # Add rows
+        task_bar.add_r_meas_action.triggered.connect(
+            lambda: self.add_row(0)
+        )
+        task_bar.add_r_obs_action.triggered.connect(
+            lambda: self.add_row(1)
+        )
+        task_bar.add_r_para_action.triggered.connect(
+            lambda: self.add_row(2)
+        )
+        task_bar.add_r_cond_action.triggered.connect(
+            lambda: self.add_row(3)
         )
         # Upload different tables
         task_bar.upload_measurement_table_action.triggered.connect(
@@ -437,7 +464,7 @@ class Controller:
 
     def add_column_to_model(self, table_index, column_name):
         allowed_columns = self.allowed_columns[table_index]
-        if column_name in allowed_columns:
+        if column_name in allowed_columns or table_index == 3:
             column_type = allowed_columns[column_name]
             default_value = "" if column_type == "STRING" else 0
             self.models[table_index].add_column(column_name, default_value)

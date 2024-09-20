@@ -55,7 +55,30 @@ class TaskBar:
         # Create actions for the Edit menu
         self.find_replace_action = QAction("Find/Replace", parent)
         self.delete_action = QAction("Delete Rows", parent)
+        # Add Columns submenu
+        self.add_column_menu = QMenu("Add Column to ...", parent)
+        self.add_c_meas_action = QAction("... Measurement Table", parent)
+        self.add_c_obs_action = QAction("... Observable Table", parent)
+        self.add_c_para_action = QAction("... Parameter Table", parent)
+        self.add_c_cond_action = QAction("... Condition Table", parent)
+        self.add_column_menu.addAction(self.add_c_meas_action)
+        self.add_column_menu.addAction(self.add_c_obs_action)
+        self.add_column_menu.addAction(self.add_c_para_action)
+        self.add_column_menu.addAction(self.add_c_cond_action)
+        # Add Rows submenu
+        self.add_row_menu = QMenu("Add Row to ...", parent)
+        self.add_r_meas_action = QAction("... Measurement Table", parent)
+        self.add_r_obs_action = QAction("... Observable Table", parent)
+        self.add_r_para_action = QAction("... Parameter Table", parent)
+        self.add_r_cond_action = QAction("... Condition Table", parent)
+        self.add_row_menu.addAction(self.add_r_meas_action)
+        self.add_row_menu.addAction(self.add_r_obs_action)
+        self.add_row_menu.addAction(self.add_r_para_action)
+        self.add_row_menu.addAction(self.add_r_cond_action)
+
 
         # Add actions to the Edit menu
         self.edit_menu.addAction(self.find_replace_action)
         self.edit_menu.addAction(self.delete_action)
+        self.edit_menu.addMenu(self.add_column_menu)
+        self.edit_menu.addMenu(self.add_row_menu)

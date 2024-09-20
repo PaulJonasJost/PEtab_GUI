@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
 
         self.tables = []
         self.add_row_buttons = []
-        self.add_column_buttons = []
+        self.add_column_button = None
         self.stacked_widgets = []
 
         for i in range(3):
@@ -160,11 +160,12 @@ class MainWindow(QMainWindow):
 
         button_layout = QHBoxLayout()
         add_row_button = QPushButton("Add Row")
-        add_column_button = QPushButton("Add Column")
         self.add_row_buttons.append(add_row_button)
-        self.add_column_buttons.append(add_column_button)
         button_layout.addWidget(add_row_button)
-        button_layout.addWidget(add_column_button)
+        if index == 3:  # Condition table keeps column
+            add_column_button = QPushButton("Add Column")
+            self.add_column_button = add_column_button
+            button_layout.addWidget(add_column_button)
 
         if include_stacked_widget:
             stacked_widget = QStackedWidget()
@@ -267,11 +268,22 @@ class MainWindow(QMainWindow):
         rows_to_select.add(index.row())
 
         context_menu = QMenu(self)
+        add_row_action = QAction("Add Row", self)
+        add_row_action.triggered.connect(
+            lambda: self.controller.add_row(table_index)
+        )
+        context_menu.addAction(add_row_action)
         delete_action = QAction("Delete Row", self)
         delete_action.triggered.connect(
             lambda: self.controller.delete_row(table_index, rows_to_select)
         )
         context_menu.addAction(delete_action)
+        # add column
+        add_column_action = QAction("Add Column", self)
+        add_column_action.triggered.connect(
+            lambda: self.controller.add_column(table_index)
+        )
+        context_menu.addAction(add_column_action)
 
         context_menu.exec(table_view.viewport().mapToGlobal(pos))
         table_view.setSelectionMode(original_selection_mode)
