@@ -52,15 +52,13 @@ class MainWindow(QMainWindow):
     def init_tabs(self):
         self.tabs = QTabWidget()
 
-        self.petable_tab = QWidget()
+        self.petable_tab = self.setup_petable_tab()
         self.sbml_tab = QWidget()
 
         self.tabs.addTab(self.petable_tab, "PEtab Tables")
         self.tabs.addTab(self.sbml_tab, "SBML Model")
 
         self.tabs.currentChanged.connect(self.on_tab_changed)
-
-        self.setup_petable_tab()
         self.setup_sbml_tab()
 
     def init_buttons(self):
@@ -95,11 +93,9 @@ class MainWindow(QMainWindow):
             self.reset_to_original_button.show()
 
     def setup_petable_tab(self):
-        layout = QVBoxLayout(self.petable_tab)
-
-        self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(0)
-        layout.addLayout(self.grid_layout)
+        petable_tab = QSplitter(Qt.Horizontal)
+        self.first_row_splitter = QSplitter(Qt.Vertical)
+        self.second_row_splitter = QSplitter(Qt.Vertical)
 
         self.tables = []
         self.add_row_buttons = []
@@ -111,10 +107,14 @@ class MainWindow(QMainWindow):
 
         self.create_table_frame(3, "Condition Table", include_stacked_widget=True)
 
-        # Set stretch factors for equal space allocation
-        for i in range(2):
-            self.grid_layout.setRowStretch(i, 1)
-            self.grid_layout.setColumnStretch(i, 1)
+        petable_tab.addWidget(self.first_row_splitter)
+        petable_tab.addWidget(self.second_row_splitter)
+        # start out equally sized:
+        self.first_row_splitter.setSizes([1, 1])
+        self.second_row_splitter.setSizes([1, 1])
+        petable_tab.setSizes([1, 1])
+
+        return petable_tab
 
     def get_current_table_index(self):
         # Choose the table that has focus and has a selection (blue highlight)
@@ -192,10 +192,11 @@ class MainWindow(QMainWindow):
             frame_layout.addWidget(table_view)
             frame_layout.addLayout(button_layout)
 
-        # Add frame to the grid layout
-        row = index // 2
-        col = index % 2
-        self.grid_layout.addWidget(frame, row, col)
+        # Add frame to the splitters
+        if index < 2:
+            self.first_row_splitter.addWidget(frame)
+        else:
+            self.second_row_splitter.addWidget(frame)
 
         return frame
 
