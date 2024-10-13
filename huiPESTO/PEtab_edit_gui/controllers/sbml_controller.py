@@ -50,7 +50,7 @@ class SbmlController(QObject):
         self.view.forward_antimony_button.clicked.connect(
             self.update_sbml_from_antimony
         )
-        self.logger.reset_to_original_button.clicked.connect(
+        self.logger.views[0].reset_to_original_button.clicked.connect(
             self.reset_to_original_model
         )
 

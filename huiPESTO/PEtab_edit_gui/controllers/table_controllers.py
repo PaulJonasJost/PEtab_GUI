@@ -40,6 +40,11 @@ class TableController(QObject):
         self.mother_controller = mother_controller
         self.view.table_view.setModel(self.model)
         self.setup_connections()
+        self.setup_connections_specific()
+
+    def setup_connections_specific(self):
+        """Will be implemented in child controllers."""
+        pass
 
     def setup_connections(self):
         """Setup connections to the view.
@@ -116,7 +121,7 @@ class TableController(QObject):
             return
 
         # Overwrite the table with the new DataFrame
-        self.overwrite_table(new_df)
+        self.overwrite_df(new_df)
 
     def overwrite_df(self, new_df: pd.DataFrame):
         # TODO: Mother controller connects to overwritten_df signal. Set df
@@ -201,7 +206,7 @@ class MeasurementController(TableController):
         for row in range(rows):
             if self.model._data_frame.at[row, "observableId"] == old_id:
                 self.model._data_frame.at[row, "observableId"] = new_id
-        self.model.something_changed.emit()
+        self.model.something_changed.emit(True)
         self.model.layoutChanged.emit()
 
     def copy_noise_parameters(
@@ -379,7 +384,7 @@ class ObservableController(TableController):
         """Check a single row of the model with petablint."""
         return petab.check_observable_df(row_data)
 
-    def maybe_rename_observable(self, old_id, new_id):
+    def maybe_rename_observable(self, new_id, old_id):
         """Potentially rename observable_ids in measurement_df.
 
         Opens a dialog to ask the user if they want to rename the observables.

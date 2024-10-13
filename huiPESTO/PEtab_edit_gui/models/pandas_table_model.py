@@ -152,6 +152,7 @@ class PandasTableModel(QAbstractTableModel):
             self.cell_needs_validation.emit(row, column)
             self.something_changed.emit(True)
             return True
+        # Maybe TODO: same for conditionId?
 
         # Validate data based on expected type
         expected_type = self._allowed_columns.get(column_name)
