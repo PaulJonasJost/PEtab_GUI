@@ -1,0 +1,11 @@
+format_version: 1
+parameter_file: para.tsv
+problems:
+- condition_files:
+  - cond.tsv
+  measurement_files:
+  - meas.tsv
+  observable_files:
+  - obs.tsv
+  sbml_files:
+  - sbml_model.xml
