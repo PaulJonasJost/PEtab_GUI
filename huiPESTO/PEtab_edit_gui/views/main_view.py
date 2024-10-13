@@ -2,7 +2,6 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDockWidget,
                                QTableView, QWidget, QVBoxLayout, QPushButton, QTabWidget)
 from PySide6.QtCore import Qt, Signal
-from ..task_bar import TaskBar
 from .sbml_view import SbmlViewer
 from .table_view import TableViewer
 from .task_bar import TaskBar
