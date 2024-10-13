@@ -12,6 +12,7 @@ from ..views.sbml_view import SbmlViewer
 class SbmlController(QObject):
     """Class for handling SBML files in the GUI."""
     overwritten_model = Signal()
+
     def __init__(
         self,
         view: SbmlViewer,
@@ -121,11 +122,11 @@ class SbmlController(QObject):
             self.view.antimony_text_edit.setPlainText(
                 self.model.antimony_text
             )
+            # self.overwritten_model.emit()  # Deactivated for now. Discuss!
             self.logger.log_message(
                 "SBML model successfully uploaded and overwritten.",
                 color="green"
             )
-            self.overwritten_model.emit()
         except Exception as e:
             self.logger.log_message(
                 f"Failed to upload SBML file: {str(e)}",
