@@ -115,6 +115,21 @@ class MainWindow(QMainWindow):
 
         self.tab_widget.currentChanged.connect(self.set_docks_visible)
 
+        self.setup_toolbar()
+
+    
+    def setup_toolbar(self):
+        # add a toolbar with actions from self.task_bar
+        tb = self.addToolBar("MainToolbar")
+
+        # first the normal open / save operations
+        tb.addAction(self.task_bar.file_menu.upload_yaml_action)
+        tb.addAction(self.task_bar.file_menu.save_action)
+                
+        # then actions like validation / upload matrix
+
+
+
     def add_menu_action(self, dock_widget, name):
         """Helper function to add actions to the menu for showing dock widgets"""
         action = self.view_menu.addAction(name)
