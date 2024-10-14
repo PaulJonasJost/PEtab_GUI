@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, \
     QLineEdit, QPushButton, QCompleter, QCheckBox, QGridLayout
 from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor
+from PySide6.QtCore import QObject, Signal
 import re
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -440,3 +441,22 @@ class PlotWidget(FigureCanvas):
         fig = Figure(figsize=(width, height), dpi=dpi)
         self.axes = fig.add_subplot(111)
         super(PlotWidget, self).__init__(fig)
+
+class SignalForwarder(QObject):
+    """Forward signals from one object to another."""
+    forwarded_signal = Signal()
+    def __init__(self, original_signal):
+        super().__init__()
+        self.original_signal = original_signal
+        self.original_signal.connect(self.forward_signal)
+
+    def forward_signal(self, *args, **kwargs):
+        """
+        Capture any arguments from the original signal and forward them.
+        """
+        self.forwarded_signal.emit(*args, **kwargs)
+
+    def connect_forwarded(self, slot):
+        """Connect a slot to the forwarded signal."""
+        self.forwarded_signal.connect(slot)
+
