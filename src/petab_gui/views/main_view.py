@@ -1,7 +1,7 @@
 """Main Window View."""
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDockWidget,
                                QTableView, QWidget, QVBoxLayout, QPushButton, QTabWidget)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSettings
 from .sbml_view import SbmlViewer
 from .table_view import TableViewer
 from .task_bar import TaskBar
@@ -117,6 +117,8 @@ class MainWindow(QMainWindow):
 
         self.setup_toolbar()
 
+        self.load_settings()
+
     
     def setup_toolbar(self):
         # add a toolbar with actions from self.task_bar
@@ -128,7 +130,6 @@ class MainWindow(QMainWindow):
         tb.addAction(self.task_bar.file_menu.save_action)
                 
         # then actions like validation / upload matrix
-
 
 
     def add_menu_action(self, dock_widget, name):
@@ -163,6 +164,38 @@ class MainWindow(QMainWindow):
         self.closing_signal.emit()
 
         if self.allow_close:
+            self.save_settings()
             event.accept()
         else:
             event.ignore()
+
+
+    def load_settings(self):
+        """Load the settings from the QSettings object."""
+        settings = QSettings("petab", "petab_gui")
+
+        # Load the visibility of the dock widgets
+        for dock, _ in self.dock_visibility.items():
+            dock.setVisible(settings.value(f"docks/{dock.objectName()}", True, type=bool))
+                
+        # Load the geometry of the main window
+        self.restoreGeometry(settings.value("main_window/geometry"))
+
+        # Restore the positions of the dock widgets
+        self.restoreState(settings.value("main_window/state"))
+
+
+    def save_settings(self):
+        """Save the settings to the QSettings object."""
+        settings = QSettings("petab", "petab_gui")
+
+        # Save the visibility of the dock widgets
+        for dock, _ in self.dock_visibility.items():
+            settings.setValue(f"docks/{dock.objectName()}", dock.isVisible())
+
+        # Save the geometry of the main window
+        settings.setValue("main_window/geometry", self.saveGeometry())
+
+        # Save the positions of the dock widgets
+        settings.setValue("main_window/state", self.saveState())
+
