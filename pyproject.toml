@@ -30,7 +30,7 @@ Repository = "https://github.com/PaulJonasJost/pyPESTO_GUI"
 Issues = "https://github.com/PaulJonasJost/pyPESTO_GUI/issues"
 
 [project.gui-scripts]
-PEtab_gui = "huiPESTO.PEtab_edit_gui.sub_app:main"
+PEtab_gui = "app:main"
 
 [project.scripts]
-PEtab_gui_cli = "huiPESTO.PEtab_edit_gui.sub_app:main"
+PEtab_gui_cli = "app:main"
