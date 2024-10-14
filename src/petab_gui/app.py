@@ -8,11 +8,19 @@ from .models import PEtabModel
 
 from pathlib import Path
 
+def find_example(path: Path) -> Path:
+    while path.parent != path:
+        if (path / "example").is_dir():
+            return path / "example"
+        path = path.parent
+        
+    raise FileNotFoundError("Could not find examples directory")
+
 def main():
     app = QApplication([])
 
     petab_problem = petab.Problem.from_yaml(
-        Path(__file__).parent / "problem.yaml"
+        find_example(Path(__file__).parent) / "problem.yaml"
     )
     model = PEtabModel(petab_problem)
     view = MainWindow()
