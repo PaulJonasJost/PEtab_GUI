@@ -121,6 +121,7 @@ class MainWindow(QMainWindow):
     def setup_toolbar(self):
         # add a toolbar with actions from self.task_bar
         tb = self.addToolBar("MainToolbar")
+        self.setUnifiedTitleAndToolBarOnMac(True)
 
         # first the normal open / save operations
         tb.addAction(self.task_bar.file_menu.upload_yaml_action)
