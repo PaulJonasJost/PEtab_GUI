@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMenu
+from PySide6.QtWidgets import QMenu, QStyle
 from PySide6.QtGui import QAction
 
 
@@ -48,6 +48,9 @@ class FileMenu(BasicMenu):
         self.upload_yaml_action = self.add_action_or_menu(
             "Upload YAML Configuration"
         )
+        self.upload_yaml_action.setIcon(self.parent.style().standardIcon(
+            QStyle.SP_DialogOpenButton
+        ))
         self.upload_table_menu = self.add_action_or_menu(
             "Upload Tables or SBML", is_action=False
         )
@@ -70,6 +73,9 @@ class FileMenu(BasicMenu):
 
         # self.open_action = self.add_action("Open")  # Currently no Function?
         self.save_action = self.add_action_or_menu("Save")
+        self.save_action.setIcon(self.parent.style().standardIcon(
+            QStyle.SP_DialogSaveButton
+        ))
         self.menu.addSeparator()
         self.exit_action = self.add_action_or_menu("Close")
 
