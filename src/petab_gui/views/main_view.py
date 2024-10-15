@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
     def setup_toolbar(self):
         # add a toolbar with actions from self.task_bar
         tb = self.addToolBar("MainToolbar")
+        tb.setObjectName("MainToolbar")
         self.setUnifiedTitleAndToolBarOnMac(True)
 
         # first the normal open / save operations
