@@ -11,6 +11,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QBrush, QColor, QPalette
 
+from ..adapters import PandasTableRepository
 from ..C import COLUMNS
 from ..commands import (
     ModifyColumnCommand,
@@ -103,7 +104,16 @@ class PandasTableModel(QAbstractTableModel):
         self._has_named_index = False
         if data_frame is None:
             data_frame = create_empty_dataframe(allowed_columns, table_type)
-        self._data_frame = data_frame
+
+        # Phase 2: Create repository (wraps DataFrame)
+        # Qt model continues using _data_frame for now (gradual migration)
+        self.repository = PandasTableRepository(
+            data_frame, table_type, allowed_columns
+        )
+        self._data_frame = (
+            self.repository.data_frame
+        )  # Alias for backward compatibility
+
         # add a view here, access is needed for selectionModels
         self.view = None
         # offset for row and column to get from the data_frame to the view
