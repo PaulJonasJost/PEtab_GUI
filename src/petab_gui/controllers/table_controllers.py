@@ -270,7 +270,7 @@ class TableController(QObject):
         for row in sorted(selected_rows, reverse=True):
             if row >= self.model.rowCount() - 1:
                 continue
-            row_info = self.model.get_df().iloc[row].to_dict()
+            row_info = self.model.repository.get_row(row)
             self.model.delete_row(row)
             self.logger.log_message(
                 f"Deleted row {row} from {self.model.table_type} table."
@@ -987,7 +987,7 @@ class MeasurementController(TableController):
         # check number of rows and signal row insertion
         rows = data_matrix.shape[0]
         # get current number of rows
-        current_rows = self.model.get_df().shape[0]
+        current_rows = self.model.repository.row_count()
         self.model.insertRows(
             position=None, rows=rows
         )  # Fills the table with empty rows
@@ -1008,7 +1008,8 @@ class MeasurementController(TableController):
                     petab.C.PREEQUILIBRATION_CONDITION_ID: preeq_id,
                 },
             )
-        bottom, right = (x - 1 for x in self.model.get_df().shape)
+        bottom = self.model.repository.row_count() - 1
+        right = len(self.model.repository.column_names()) - 1
         bottom_right = self.model.createIndex(bottom, right)
         self.model.dataChanged.emit(top_left, bottom_right)
         self.logger.log_message(
@@ -1138,16 +1139,16 @@ class ConditionController(TableController):
 
     def maybe_add_condition(self, condition_id, old_id=None):
         """Add a condition to the condition table if it does not exist yet."""
-        if condition_id in self.model.get_df().index or not condition_id:
+        if self.model.repository.get_row_by_id(condition_id) or not condition_id:
             return
         # add a row
         self.model.insertRows(position=None, rows=1)
         self.model.fill_row(
-            self.model.get_df().shape[0] - 1,
+            self.model.repository.row_count() - 1,
             data={petab.C.CONDITION_ID: condition_id},
         )
         self.model.cell_needs_validation.emit(
-            self.model.get_df().shape[0] - 1, 0
+            self.model.repository.row_count() - 1, 0
         )
         self.logger.log_message(
             f"Automatically added condition '{condition_id}' to the condition "
