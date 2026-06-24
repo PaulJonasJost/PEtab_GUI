@@ -1139,7 +1139,10 @@ class ConditionController(TableController):
 
     def maybe_add_condition(self, condition_id, old_id=None):
         """Add a condition to the condition table if it does not exist yet."""
-        if self.model.repository.get_row_by_id(condition_id) or not condition_id:
+        if (
+            self.model.repository.get_row_by_id(condition_id)
+            or not condition_id
+        ):
             return
         # add a row
         self.model.insertRows(position=None, rows=1)
@@ -1170,7 +1173,7 @@ class ConditionController(TableController):
             table_view.setItemDelegateForColumn(
                 conditionName_index, self.completers[petab.C.CONDITION_NAME]
             )
-        for column in self.model.get_df().columns:
+        for column in self.model.repository.column_names():
             if column in [petab.C.CONDITION_ID, petab.C.CONDITION_NAME]:
                 continue
             column_index = self.model.return_column_index(column)
@@ -1293,16 +1296,16 @@ class ObservableController(TableController):
 
         Currently, `old_id` is not used.
         """
-        if observable_id in self.model.get_df().index or not observable_id:
+        if self.model.repository.get_row_by_id(observable_id) or not observable_id:
             return
         # add a row
         self.model.insertRows(position=None, rows=1)
         self.model.fill_row(
-            self.model.get_df().shape[0] - 1,
+            self.model.repository.row_count() - 1,
             data={petab.C.OBSERVABLE_ID: observable_id},
         )
         self.model.cell_needs_validation.emit(
-            self.model.get_df().shape[0] - 1, 0
+            self.model.repository.row_count() - 1, 0
         )
         self.logger.log_message(
             f"Automatically added observable '{observable_id}' to the "
