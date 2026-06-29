@@ -530,45 +530,110 @@ class TableController(QObject):
     def replace_all(
         self, search_text, replace_text, case_sensitive=False, regex=False
     ):
-        """Replace all occurrences of the search term in the Model."""
+        """Replace all occurrences of the search term in the Model with undo support."""
         if not search_text or not replace_text:
             return
 
+        from ..commands import ModifyDataFrameCommand
+
         df = self.model._data_frame
-        if regex:
-            pattern = re.compile(
-                search_text, 0 if case_sensitive else re.IGNORECASE
-            )
-            df.replace(
-                to_replace=pattern,
-                value=replace_text,
-                regex=True,
-                inplace=True,
-            )
-        else:
-            if not case_sensitive:
-                df.replace(
-                    to_replace=re.escape(search_text),
-                    value=replace_text,
-                    regex=True,
-                    inplace=True,
-                )
-            else:
-                df.replace(
-                    to_replace=search_text, value=replace_text, inplace=True
-                )
+        changes = {}  # Will store {(row_id, col_name): (old_val, new_val)}
+
+        # Find all matching cells and store old values
+        for col in df.columns:
+            for row_idx, row_id in enumerate(df.index):
+                old_val = df.at[row_id, col]
+                if pd.isna(old_val):
+                    continue
+
+                old_str = str(old_val)
+                # Check if this cell matches
+                matches = False
+                if regex:
+                    pattern = re.compile(
+                        search_text, 0 if case_sensitive else re.IGNORECASE
+                    )
+                    new_str = pattern.sub(replace_text, old_str)
+                    matches = new_str != old_str
+                else:
+                    if case_sensitive:
+                        matches = search_text in old_str
+                        new_str = old_str.replace(search_text, replace_text)
+                    else:
+                        matches = search_text.lower() in old_str.lower()
+                        if matches:
+                            new_str = re.sub(
+                                re.escape(search_text),
+                                replace_text,
+                                old_str,
+                                flags=re.IGNORECASE,
+                            )
+
+                if matches and new_str != old_str:
+                    changes[(row_id, col)] = (old_val, new_str)
 
         # Replace in the index as well
+        index_renames = []  # Collect index renames for undo support
         if isinstance(df.index, pd.Index) and df.index.name:
-            index_map = {
-                idx: pattern.sub(replace_text, str(idx))
-                if regex
-                else str(idx).replace(search_text, replace_text)
-                for idx in df.index
-                if search_text in str(idx)
-            }
-            if index_map:
-                df.rename(index=index_map, inplace=True)
+            for row_idx, row_id in enumerate(df.index):
+                old_str = str(row_id)
+                matches = False
+                if regex:
+                    pattern = re.compile(
+                        search_text, 0 if case_sensitive else re.IGNORECASE
+                    )
+                    new_str = pattern.sub(replace_text, old_str)
+                    matches = new_str != old_str
+                else:
+                    if case_sensitive:
+                        matches = search_text in old_str
+                        new_str = old_str.replace(search_text, replace_text)
+                    else:
+                        matches = search_text.lower() in old_str.lower()
+                        if matches:
+                            new_str = re.sub(
+                                re.escape(search_text),
+                                replace_text,
+                                old_str,
+                                flags=re.IGNORECASE,
+                            )
+
+                if matches and new_str != old_str:
+                    index_renames.append((row_id, new_str, row_idx))
+
+        # Create undo command(s)
+        if changes or index_renames:
+            if self.model.undo_stack:
+                # Use macro to group cell changes + index renames into one undo operation
+                self.model.undo_stack.beginMacro(
+                    f"Replace '{search_text}' with '{replace_text}'"
+                )
+
+                # Push cell changes command
+                if changes:
+                    command = ModifyDataFrameCommand(
+                        self.model, changes, "Replace in cells"
+                    )
+                    self.model.undo_stack.push(command)
+
+                # Push index rename commands
+                if index_renames:
+                    from ..commands import RenameIndexCommand
+
+                    for old_id, new_id, row_idx in index_renames:
+                        model_index = self.model.index(row_idx, 0)
+                        cmd = RenameIndexCommand(
+                            self.model, old_id, new_id, model_index
+                        )
+                        self.model.undo_stack.push(cmd)
+
+                self.model.undo_stack.endMacro()
+            else:
+                # Fallback: apply changes directly if no undo stack
+                for (row_id, col), (old_val, new_val) in changes.items():
+                    df.at[row_id, col] = new_val
+                for old_id, new_id, _ in index_renames:
+                    df.rename(index={old_id: new_id}, inplace=True)
 
     def get_columns(self):
         """Get the columns of the table."""
@@ -1296,7 +1361,10 @@ class ObservableController(TableController):
 
         Currently, `old_id` is not used.
         """
-        if self.model.repository.get_row_by_id(observable_id) or not observable_id:
+        if (
+            self.model.repository.get_row_by_id(observable_id)
+            or not observable_id
+        ):
             return
         # add a row
         self.model.insertRows(position=None, rows=1)

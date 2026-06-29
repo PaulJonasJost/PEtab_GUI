@@ -7,7 +7,7 @@ pandas or Qt dependencies. It's fast, lightweight, and perfect for unit tests.
 from collections.abc import Iterable
 from typing import Any
 
-from src.petab_gui.domain.validation_result import (
+from petab_gui.domain.validation_result import (
     ValidationLevel,
     ValidationResult,
 )

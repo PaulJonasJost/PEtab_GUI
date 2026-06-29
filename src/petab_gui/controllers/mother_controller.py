@@ -380,7 +380,10 @@ class MainController:
         actions["find+replace"] = QAction(
             qta.icon("mdi6.find-replace"), "Find/Replace", self.view
         )
-        actions["find+replace"].setShortcut(QKeySequence.Replace)
+        sequence = QKeySequence(QKeySequence.Replace)
+        if sequence.isEmpty():
+            sequence = QKeySequence("Ctrl+R")
+        actions["find+replace"].setShortcut(sequence)
         actions["find+replace"].triggered.connect(self.replace)
         # Copy / Paste
         actions["copy"] = QAction(

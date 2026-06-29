@@ -258,6 +258,9 @@ class PandasTableRepository:
         """Get table type."""
         return self._table_type
 
+    # DataFrame access (for backward compatibility and bulk operations)
+    # NOTE: data_frame property is defined below in "Additional helper methods" section
+
     # Validation
     def get_invalid_cells(self) -> dict[tuple[int, str], str]:
         """Get all invalid cells."""
@@ -309,3 +312,13 @@ class PandasTableRepository:
         In the long term, all access should go through repository methods.
         """
         return self._data_frame
+
+    @data_frame.setter
+    def data_frame(self, new_df: pd.DataFrame) -> None:
+        """Set the underlying DataFrame and clear invalid cell tracking.
+
+        When controllers assign a new DataFrame, we need to update the repository's
+        internal state and clear invalid cell tracking.
+        """
+        self._data_frame = new_df
+        self._invalid_cells.clear()
