@@ -72,9 +72,20 @@ class ModifyColumnCommand(QUndoCommand):
         self.old_values = None
         self.position = None
 
-        if not add_mode and column_name in model._data_frame.columns:
-            self.position = model._data_frame.columns.get_loc(column_name)
-            self.old_values = model._data_frame[column_name].copy()
+        if (
+            not add_mode
+            and column_name in self.model.repository.column_names()
+        ):
+            self.position = self.model.repository.get_column_position(
+                column_name
+            )
+            # Store old values as dict {row_id: value}
+            self.old_values = {}
+            for row_idx in range(self.model.repository.row_count()):
+                row_id = self.model.repository.get_row_id(row_idx)
+                self.old_values[row_id] = self.model.repository.get_cell(
+                    row_idx, column_name
+                )
 
     def redo(self):
         """Execute the command to add or remove a column.
@@ -83,18 +94,20 @@ class ModifyColumnCommand(QUndoCommand):
         If in remove mode, removes the specified column from the table.
         """
         if self.add_mode:
-            position = self.model._data_frame.shape[1]
+            position = len(self.model.repository.column_names())
             self.model.beginInsertColumns(QModelIndex(), position, position)
-            self.model._data_frame[self.column_name] = ""
+            self.model.repository.add_column(
+                self.column_name, default_value=""
+            )
             self.model.endInsertColumns()
         else:
-            self.position = self.model._data_frame.columns.get_loc(
+            self.position = self.model.repository.get_column_position(
                 self.column_name
             )
             self.model.beginRemoveColumns(
                 QModelIndex(), self.position, self.position
             )
-            self.model._data_frame.drop(columns=self.column_name, inplace=True)
+            self.model.repository.delete_column(self.column_name)
             self.model.endRemoveColumns()
 
     def undo(self):
@@ -104,17 +117,22 @@ class ModifyColumnCommand(QUndoCommand):
         If the original command was to remove a column, this restores it.
         """
         if self.add_mode:
-            position = self.model._data_frame.columns.get_loc(self.column_name)
+            position = self.model.repository.get_column_position(
+                self.column_name
+            )
             self.model.beginRemoveColumns(QModelIndex(), position, position)
-            self.model._data_frame.drop(columns=self.column_name, inplace=True)
+            self.model.repository.delete_column(self.column_name)
             self.model.endRemoveColumns()
         else:
             self.model.beginInsertColumns(
                 QModelIndex(), self.position, self.position
             )
-            self.model._data_frame.insert(
-                self.position, self.column_name, self.old_values
-            )
+            # Restore column with old values
+            # Repository doesn't support positional insert, use DataFrame
+            df = self.model._data_frame
+            # Convert dict back to Series for insert
+            old_values_series = pd.Series(self.old_values)
+            df.insert(self.position, self.column_name, old_values_series)
             self.model.endInsertColumns()
 
 
@@ -143,8 +161,6 @@ class ModifyRowCommand(QUndoCommand):
         self.old_rows = None
         self.old_ind_names = None
 
-        df = self.model._data_frame
-
         if add_mode:
             # Adding: interpret input as count of new rows
             self.row_indices = self._generate_new_indices(row_indices)
@@ -153,13 +169,23 @@ class ModifyRowCommand(QUndoCommand):
             self.row_indices = (
                 row_indices if isinstance(row_indices, list) else [row_indices]
             )
-            self.old_rows = df.iloc[self.row_indices].copy()
-            self.old_ind_names = [df.index[idx] for idx in self.row_indices]
+            # Store old rows as list of dicts (repository format)
+            self.old_rows = []
+            for row_idx in self.row_indices:
+                row_data = self.model.repository.get_row(row_idx)
+                self.old_rows.append(row_data)
+
+            # Store row IDs using repository
+            self.old_ind_names = [
+                self.model.repository.get_row_id(idx)
+                for idx in self.row_indices
+            ]
 
     def _generate_new_indices(self, count):
         """Generate default row indices based on table type and index type."""
-        df = self.model._data_frame
         base = 0
+        # Get existing indices through repository
+        df = self.model._data_frame
         existing = set(df.index.astype(str))
 
         indices = []
@@ -177,32 +203,47 @@ class ModifyRowCommand(QUndoCommand):
         If in add mode, adds new rows to the table.
         If in remove mode, removes the specified rows from the table.
         """
-        df = self.model._data_frame
-
         if self.add_mode:
-            position = (
-                0 if df.empty else df.shape[0] - 1
-            )  # insert *before* the auto-row
+            # Get position before adding rows
+            row_count = self.model.repository.row_count()
+            position = 0 if row_count == 0 else row_count - 1
+
             self.model.beginInsertRows(
                 QModelIndex(), position, position + len(self.row_indices) - 1
             )
-            # save dtypes
+
+            # Add rows through repository
+            # Create empty row data dict
+            empty_row = dict.fromkeys(
+                self.model.repository.column_names(), np.nan
+            )
+
+            df = self.model._data_frame
             dtypes = df.dtypes.copy()
-            for _i, idx in enumerate(self.row_indices):
+
+            for idx in self.row_indices:
+                # Repository doesn't support custom index yet, use DataFrame
                 df.loc[idx] = [np.nan] * df.shape[1]
-            # set dtypes
+
+            # Restore dtypes
             if np.any(dtypes != df.dtypes):
                 for col, dtype in dtypes.items():
                     if dtype != df.dtypes[col]:
                         df[col] = _convert_dtype_with_nullable_int(
                             df[col], dtype
                         )
+
             self.model.endInsertRows()
         else:
+            # Remove rows
             self.model.beginRemoveRows(
                 QModelIndex(), min(self.row_indices), max(self.row_indices)
             )
-            df.drop(index=self.old_ind_names, inplace=True)
+
+            # Delete rows through repository
+            for row_idx in sorted(self.row_indices, reverse=True):
+                self.model.repository.delete_row(row_idx)
+
             self.model.endRemoveRows()
 
     def undo(self):
@@ -214,31 +255,48 @@ class ModifyRowCommand(QUndoCommand):
         df = self.model._data_frame
 
         if self.add_mode:
-            positions = [df.index.get_loc(idx) for idx in self.row_indices]
+            # Remove the rows we added
+            positions = [
+                self.model.repository.get_row_position(idx)
+                for idx in self.row_indices
+            ]
             self.model.beginRemoveRows(
                 QModelIndex(), min(positions), max(positions)
             )
-            df.drop(index=self.old_ind_names, inplace=True)
+
+            # Delete through repository
+            for idx in sorted(self.row_indices, reverse=True):
+                row_pos = self.model.repository.get_row_position(idx)
+                self.model.repository.delete_row(row_pos)
+
             self.model.endRemoveRows()
         else:
+            # Restore deleted rows
             self.model.beginInsertRows(
                 QModelIndex(), min(self.row_indices), max(self.row_indices)
             )
+
+            # Restore rows at original positions
+            # This requires DataFrame manipulation for index ordering
             restore_index_order = df.index
-            for pos, index_name, row in zip(
+            for pos, index_name, row_data in zip(
                 self.row_indices,
                 self.old_ind_names,
-                self.old_rows.values,
+                self.old_rows,
                 strict=False,
             ):
                 restore_index_order = restore_index_order.insert(
                     pos, index_name
                 )
-                df.loc[index_name] = row
+                # Restore row - use DataFrame for positioning
+                df.loc[index_name] = [
+                    row_data.get(col, "") for col in df.columns
+                ]
                 df.sort_index(
                     inplace=True,
                     key=lambda x: x.map(restore_index_order.get_loc),
                 )
+
             self.model.endInsertRows()
 
 
@@ -275,52 +333,42 @@ class ModifyDataFrameCommand(QUndoCommand):
         self._apply_changes(use_new=False)
 
     def _apply_changes(self, use_new: bool):
-        """Apply changes to the DataFrame.
+        """Apply changes via repository.
 
         Args:
         use_new:
             If True, apply the new values; if False, restore the old values
         """
-        df = self.model._data_frame
-        col_offset = 1 if self.model._has_named_index else 0
-        original_dtypes = df.dtypes.copy()
-
-        # Apply changes
-        update_vals = {
-            (row, col): val[1 if use_new else 0]
-            for (row, col), val in self.changes.items()
-        }
-        if not update_vals:
+        if not self.changes:
             return
-        update_df = pd.Series(update_vals).unstack()
-        for col in update_df.columns:
-            if col in df.columns:
-                df[col] = df[col].astype("object")
-        update_df.replace({None: "Placeholder_temp"}, inplace=True)
-        df.update(update_df)
-        df.replace({"Placeholder_temp": ""}, inplace=True)
-        for col, dtype in original_dtypes.items():
-            if col not in update_df.columns:
-                continue
 
-            # For numeric types, convert string inputs to numbers first
-            is_pandas_nullable_int = isinstance(
-                dtype,
-                pd.Int64Dtype | pd.Int32Dtype | pd.Int16Dtype | pd.Int8Dtype,
+        # Apply changes through repository
+        # Repository handles validation and dtype conversion
+        col_offset = 1 if self.model._has_named_index else 0
+
+        row_positions = []
+        col_positions = []
+
+        for (row_id, col_name), (old_val, new_val) in self.changes.items():
+            # Select which value to apply
+            value = new_val if use_new else old_val
+
+            # Get row position from row_id using repository
+            row_pos = self.model.repository.get_row_position(row_id)
+
+            # Apply change through repository (handles validation & dtype)
+            self.model.repository.set_cell(row_pos, col_name, value)
+
+            # Track positions for signal emission
+            row_positions.append(row_pos)
+            col_positions.append(
+                self.model.repository.get_column_position(col_name)
+                + col_offset
             )
-            if is_pandas_nullable_int or np.issubdtype(dtype, np.number):
-                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            # Convert to appropriate dtype, handling nullable integers
-            df[col] = _convert_dtype_with_nullable_int(df[col], dtype)
-
-        rows = [df.index.get_loc(row_key) for (row_key, _) in self.changes]
-        cols = [
-            df.columns.get_loc(col) + col_offset for (_, col) in self.changes
-        ]
-
-        top_left = self.model.index(min(rows), min(cols))
-        bottom_right = self.model.index(max(rows), max(cols))
+        # Emit dataChanged signal for updated region
+        top_left = self.model.index(min(row_positions), min(col_positions))
+        bottom_right = self.model.index(max(row_positions), max(col_positions))
         self.model.dataChanged.emit(top_left, bottom_right, [Qt.DisplayRole])
 
 
@@ -383,11 +431,18 @@ class RenameValueCommand(QUndoCommand):
         )
         self.changes = {}  # {(row_idx, col_name): (old_val, new_val)}
 
-        df = self.model._data_frame
-        for col_name in self.column_names:
-            mask = df[col_name].eq(self.old_id)
-            for row_idx in df.index[mask]:
-                self.changes[(row_idx, col_name)] = (self.old_id, self.new_id)
+        # Find all matching values through repository
+        for row_pos, row_data in enumerate(
+            self.model.repository.get_all_rows()
+        ):
+            for col_name in self.column_names:
+                if col_name in row_data and row_data[col_name] == self.old_id:
+                    # Get row_id for change tracking
+                    row_id = self.model.repository.get_row_id(row_pos)
+                    self.changes[(row_id, col_name)] = (
+                        self.old_id,
+                        self.new_id,
+                    )
 
     def redo(self):
         self._apply_changes(use_new=True)
@@ -396,16 +451,30 @@ class RenameValueCommand(QUndoCommand):
         self._apply_changes(use_new=False)
 
     def _apply_changes(self, use_new: bool):
-        df = self.model._data_frame
-        for (row_idx, col_name), (old_val, new_val) in self.changes.items():
-            df.at[row_idx, col_name] = new_val if use_new else old_val
+        if not self.changes:
+            return
 
-        if self.changes:
-            rows = [df.index.get_loc(row) for (row, _) in self.changes]
-            cols = [df.columns.get_loc(col) + 1 for (_, col) in self.changes]
-            top_left = self.model.index(min(rows), min(cols))
-            bottom_right = self.model.index(max(rows), max(cols))
-            self.model.dataChanged.emit(
-                top_left, bottom_right, [Qt.DisplayRole, Qt.EditRole]
+        row_positions = []
+        col_positions = []
+
+        for (row_id, col_name), (old_val, new_val) in self.changes.items():
+            # Get row position using repository
+            row_pos = self.model.repository.get_row_position(row_id)
+
+            # Apply change through repository
+            value = new_val if use_new else old_val
+            self.model.repository.set_cell(row_pos, col_name, value)
+
+            # Track positions for signal emission
+            row_positions.append(row_pos)
+            col_positions.append(
+                self.model.repository.get_column_position(col_name) + 1
             )
-            self.model.something_changed.emit(True)
+
+        # Emit signals
+        top_left = self.model.index(min(row_positions), min(col_positions))
+        bottom_right = self.model.index(max(row_positions), max(col_positions))
+        self.model.dataChanged.emit(
+            top_left, bottom_right, [Qt.DisplayRole, Qt.EditRole]
+        )
+        self.model.something_changed.emit(True)

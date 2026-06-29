@@ -72,6 +72,20 @@ class PandasTableRepository:
         for _, row in self._data_frame.iterrows():
             yield row.to_dict()
 
+    def get_row_id(self, row_position: int) -> str:
+        """Get row identifier from position."""
+        if not 0 <= row_position < len(self._data_frame):
+            raise IndexError(f"Row position {row_position} out of bounds")
+        return str(self._data_frame.index[row_position])
+
+    def get_row_position(self, row_id: str) -> int:
+        """Get row position from identifier."""
+        return self._data_frame.index.get_loc(row_id)
+
+    def get_column_position(self, column_name: str) -> int:
+        """Get column position from name."""
+        return self._data_frame.columns.get_loc(column_name)
+
     # Cell access
     def get_cell(self, row: int, column: str) -> Any:
         """Get single cell value."""

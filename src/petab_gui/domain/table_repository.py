@@ -73,6 +73,60 @@ class TableRepository(Protocol):
         """
         ...
 
+    def get_row_id(self, row_position: int) -> str:
+        """Get row identifier from position.
+
+        Args:
+            row_position: Zero-based row position
+
+        Returns:
+            Row identifier (index value)
+
+        Raises:
+            IndexError: If row position is out of bounds
+
+        Example:
+            >>> repo.get_row_id(0)
+            'k1'
+        """
+        ...
+
+    def get_row_position(self, row_id: str) -> int:
+        """Get row position from identifier.
+
+        Args:
+            row_id: Row identifier (index value)
+
+        Returns:
+            Zero-based row position
+
+        Raises:
+            KeyError: If row_id not found
+
+        Example:
+            >>> repo.get_row_position('k1')
+            0
+        """
+        ...
+
+    def get_column_position(self, column_name: str) -> int:
+        """Get column position from name.
+
+        Args:
+            column_name: Column name
+
+        Returns:
+            Zero-based column position
+
+        Raises:
+            KeyError: If column not found
+
+        Example:
+            >>> repo.get_column_position('nominalValue')
+            1
+        """
+        ...
+
     # Cell access
     def get_cell(self, row: int, column: str) -> Any:
         """Get single cell value.

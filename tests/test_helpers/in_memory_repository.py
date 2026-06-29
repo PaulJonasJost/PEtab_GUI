@@ -65,6 +65,33 @@ class InMemoryTableRepository:
         for row in self.rows:
             yield row.copy()
 
+    def get_row_id(self, row_position: int) -> str:
+        """Get row identifier from position."""
+        if not 0 <= row_position < len(self.rows):
+            raise IndexError(f"Row position {row_position} out of bounds")
+        # Use first column value as ID
+        if self.columns:
+            return str(self.rows[row_position].get(self.columns[0], ""))
+        return str(row_position)
+
+    def get_row_position(self, row_id: str) -> int:
+        """Get row position from identifier."""
+        if not self.columns:
+            raise KeyError(f"No columns defined, cannot find row_id: {row_id}")
+
+        id_col = self.columns[0]
+        for pos, row in enumerate(self.rows):
+            if str(row.get(id_col)) == str(row_id):
+                return pos
+        raise KeyError(f"Row ID not found: {row_id}")
+
+    def get_column_position(self, column_name: str) -> int:
+        """Get column position from name."""
+        try:
+            return self.columns.index(column_name)
+        except ValueError:
+            raise KeyError(f"Column not found: {column_name}")
+
     # Cell access
     def get_cell(self, row: int, column: str) -> Any:
         """Get single cell value."""
