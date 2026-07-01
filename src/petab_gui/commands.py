@@ -1,4 +1,13 @@
-"""Store commands for the do/undo functionality."""
+"""Store commands for the do/undo functionality.
+
+TRANSITIONAL STATE: Commands are being migrated from direct DataFrame access
+to repository pattern. Some operations still use DataFrame directly when:
+- Repository doesn't support the operation yet (e.g., positional column insert)
+- Index handling requires DataFrame-specific operations
+- Dtype preservation requires pandas-specific logic
+
+This hybrid approach will be resolved when migration to PEtab v2.0 is complete.
+"""
 
 import numpy as np
 import pandas as pd
@@ -212,12 +221,7 @@ class ModifyRowCommand(QUndoCommand):
                 QModelIndex(), position, position + len(self.row_indices) - 1
             )
 
-            # Add rows through repository
-            # Create empty row data dict
-            empty_row = dict.fromkeys(
-                self.model.repository.column_names(), np.nan
-            )
-
+            # Add rows through DataFrame (repository doesn't support custom index yet)
             df = self.model._data_frame
             dtypes = df.dtypes.copy()
 
@@ -344,6 +348,7 @@ class ModifyDataFrameCommand(QUndoCommand):
 
         # Apply changes through repository
         # Repository handles validation and dtype conversion
+        # View column offset: +1 if index column is displayed, +0 otherwise
         col_offset = 1 if self.model._has_named_index else 0
 
         row_positions = []

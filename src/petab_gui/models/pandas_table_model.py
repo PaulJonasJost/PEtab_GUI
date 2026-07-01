@@ -597,8 +597,12 @@ class PandasTableModel(QAbstractTableModel):
     def _data_frame(self):
         """Property that delegates to repository's DataFrame.
 
-        This allows backward compatibility with code that accesses _data_frame directly,
-        while ensuring the repository is always the source of truth.
+        TRANSITIONAL: During migration to repository pattern, this provides
+        backward compatibility for code that directly accesses _data_frame.
+        Repository is the source of truth.
+
+        Note: Direct DataFrame access is discouraged. Use repository methods instead.
+        This property will be deprecated once migration to PEtab v2.0 is complete.
         """
         return self.repository.data_frame
 
@@ -606,8 +610,10 @@ class PandasTableModel(QAbstractTableModel):
     def _data_frame(self, new_df):
         """Update the repository's DataFrame when _data_frame is assigned.
 
-        This ensures that when controllers do model._data_frame = new_df,
-        the repository gets updated as well.
+        TRANSITIONAL: This setter ensures controllers using model._data_frame = new_df
+        properly update the repository. Direct assignment bypasses validation.
+
+        Warning: This will be deprecated. Use repository.replace_data() instead.
         """
         self.repository.data_frame = new_df
 

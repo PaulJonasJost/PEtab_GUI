@@ -527,6 +527,41 @@ class TableController(QObject):
             self.model.highlighted_cells.discard((row, col))
             self.model.dataChanged.emit(index, index, [Qt.DisplayRole])
 
+    @staticmethod
+    def _find_and_replace_in_text(
+        text: str, search: str, replace: str, case_sensitive: bool, use_regex: bool
+    ) -> tuple[bool, str]:
+        """Find and replace text with given options.
+
+        Args:
+            text: The text to search in
+            search: The search pattern
+            replace: The replacement text
+            case_sensitive: Whether to match case
+            use_regex: Whether to use regex matching
+
+        Returns:
+            Tuple of (matched, new_text) where matched indicates if replacement occurred
+        """
+        if use_regex:
+            pattern = re.compile(search, 0 if case_sensitive else re.IGNORECASE)
+            new_text = pattern.sub(replace, text)
+            return new_text != text, new_text
+
+        # Non-regex replacement
+        if case_sensitive:
+            matched = search in text
+            new_text = text.replace(search, replace) if matched else text
+        else:
+            matched = search.lower() in text.lower()
+            new_text = (
+                re.sub(re.escape(search), replace, text, flags=re.IGNORECASE)
+                if matched
+                else text
+            )
+
+        return matched, new_text
+
     def replace_all(
         self, search_text, replace_text, case_sensitive=False, regex=False
     ):
@@ -546,59 +581,22 @@ class TableController(QObject):
                 if pd.isna(old_val):
                     continue
 
-                old_str = str(old_val)
-                # Check if this cell matches
-                matches = False
-                if regex:
-                    pattern = re.compile(
-                        search_text, 0 if case_sensitive else re.IGNORECASE
-                    )
-                    new_str = pattern.sub(replace_text, old_str)
-                    matches = new_str != old_str
-                else:
-                    if case_sensitive:
-                        matches = search_text in old_str
-                        new_str = old_str.replace(search_text, replace_text)
-                    else:
-                        matches = search_text.lower() in old_str.lower()
-                        if matches:
-                            new_str = re.sub(
-                                re.escape(search_text),
-                                replace_text,
-                                old_str,
-                                flags=re.IGNORECASE,
-                            )
+                matched, new_str = self._find_and_replace_in_text(
+                    str(old_val), search_text, replace_text, case_sensitive, regex
+                )
 
-                if matches and new_str != old_str:
+                if matched and new_str != str(old_val):
                     changes[(row_id, col)] = (old_val, new_str)
 
         # Replace in the index as well
         index_renames = []  # Collect index renames for undo support
         if isinstance(df.index, pd.Index) and df.index.name:
             for row_idx, row_id in enumerate(df.index):
-                old_str = str(row_id)
-                matches = False
-                if regex:
-                    pattern = re.compile(
-                        search_text, 0 if case_sensitive else re.IGNORECASE
-                    )
-                    new_str = pattern.sub(replace_text, old_str)
-                    matches = new_str != old_str
-                else:
-                    if case_sensitive:
-                        matches = search_text in old_str
-                        new_str = old_str.replace(search_text, replace_text)
-                    else:
-                        matches = search_text.lower() in old_str.lower()
-                        if matches:
-                            new_str = re.sub(
-                                re.escape(search_text),
-                                replace_text,
-                                old_str,
-                                flags=re.IGNORECASE,
-                            )
+                matched, new_str = self._find_and_replace_in_text(
+                    str(row_id), search_text, replace_text, case_sensitive, regex
+                )
 
-                if matches and new_str != old_str:
+                if matched and new_str != str(row_id):
                     index_renames.append((row_id, new_str, row_idx))
 
         # Create undo command(s)
