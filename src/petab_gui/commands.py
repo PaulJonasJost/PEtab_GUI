@@ -221,7 +221,8 @@ class ModifyRowCommand(QUndoCommand):
                 QModelIndex(), position, position + len(self.row_indices) - 1
             )
 
-            # Add rows through DataFrame (repository doesn't support custom index yet)
+            # Add rows through DataFrame (repository doesn't support custom
+            # index yet)
             df = self.model._data_frame
             dtypes = df.dtypes.copy()
 

@@ -529,7 +529,11 @@ class TableController(QObject):
 
     @staticmethod
     def _find_and_replace_in_text(
-        text: str, search: str, replace: str, case_sensitive: bool, use_regex: bool
+        text: str,
+        search: str,
+        replace: str,
+        case_sensitive: bool,
+        use_regex: bool,
     ) -> tuple[bool, str]:
         """Find and replace text with given options.
 
@@ -541,10 +545,13 @@ class TableController(QObject):
             use_regex: Whether to use regex matching
 
         Returns:
-            Tuple of (matched, new_text) where matched indicates if replacement occurred
+            Tuple of (matched, new_text) where matched indicates if
+            replacement occurred
         """
         if use_regex:
-            pattern = re.compile(search, 0 if case_sensitive else re.IGNORECASE)
+            pattern = re.compile(
+                search, 0 if case_sensitive else re.IGNORECASE
+            )
             new_text = pattern.sub(replace, text)
             return new_text != text, new_text
 
@@ -565,7 +572,11 @@ class TableController(QObject):
     def replace_all(
         self, search_text, replace_text, case_sensitive=False, regex=False
     ):
-        """Replace all occurrences of the search term in the Model with undo support."""
+        """Replace all occurrences of search term in Model with undo.
+
+        Replace all occurrences of the search term in the Model with undo
+        support.
+        """
         if not search_text or not replace_text:
             return
 
@@ -576,13 +587,17 @@ class TableController(QObject):
 
         # Find all matching cells and store old values
         for col in df.columns:
-            for row_idx, row_id in enumerate(df.index):
+            for _row_idx, row_id in enumerate(df.index):
                 old_val = df.at[row_id, col]
                 if pd.isna(old_val):
                     continue
 
                 matched, new_str = self._find_and_replace_in_text(
-                    str(old_val), search_text, replace_text, case_sensitive, regex
+                    str(old_val),
+                    search_text,
+                    replace_text,
+                    case_sensitive,
+                    regex,
                 )
 
                 if matched and new_str != str(old_val):
@@ -593,7 +608,11 @@ class TableController(QObject):
         if isinstance(df.index, pd.Index) and df.index.name:
             for row_idx, row_id in enumerate(df.index):
                 matched, new_str = self._find_and_replace_in_text(
-                    str(row_id), search_text, replace_text, case_sensitive, regex
+                    str(row_id),
+                    search_text,
+                    replace_text,
+                    case_sensitive,
+                    regex,
                 )
 
                 if matched and new_str != str(row_id):
@@ -602,7 +621,8 @@ class TableController(QObject):
         # Create undo command(s)
         if changes or index_renames:
             if self.model.undo_stack:
-                # Use macro to group cell changes + index renames into one undo operation
+                # Use macro to group cell changes + index renames into
+                # one undo operation
                 self.model.undo_stack.beginMacro(
                     f"Replace '{search_text}' with '{replace_text}'"
                 )
@@ -628,7 +648,7 @@ class TableController(QObject):
                 self.model.undo_stack.endMacro()
             else:
                 # Fallback: apply changes directly if no undo stack
-                for (row_id, col), (old_val, new_val) in changes.items():
+                for (row_id, col), (_old_val, new_val) in changes.items():
                     df.at[row_id, col] = new_val
                 for old_id, new_id, _ in index_renames:
                     df.rename(index={old_id: new_id}, inplace=True)

@@ -1,8 +1,9 @@
 """Pandas implementation of TableRepository.
 
-This adapter wraps a pandas DataFrame to implement the TableRepository protocol.
-It handles validation, invalid cell tracking, and all CRUD operations while
-maintaining compatibility with the existing PandasTableModel behavior.
+This adapter wraps a pandas DataFrame to implement the TableRepository
+protocol. It handles validation, invalid cell tracking, and all CRUD
+operations while maintaining compatibility with the existing
+PandasTableModel behavior.
 """
 
 from collections.abc import Iterable
@@ -19,15 +20,17 @@ from ..models.validators import is_invalid, validate_value
 class PandasTableRepository:
     """Pandas DataFrame adapter implementing TableRepository protocol.
 
-    This adapter provides the seam between controllers and pandas DataFrames.
-    In the future, when migrating to pydantic/PEtab v2.0, this adapter will be
-    replaced with PydanticTableRepository, but controllers won't need to change.
+    This adapter provides the seam between controllers and pandas
+    DataFrames. In the future, when migrating to pydantic/PEtab v2.0, this
+    adapter will be replaced with PydanticTableRepository, but controllers
+    won't need to change.
 
     Attributes:
         _data_frame: The underlying pandas DataFrame
         _table_type: Table type (measurement, parameter, etc.)
         _allowed_columns: Column definitions from C.COLUMNS
-        _invalid_cells: Set of (row_index, column_name) tuples for invalid cells
+        _invalid_cells: Set of (row_index, column_name) tuples for invalid
+            cells
     """
 
     def __init__(
@@ -41,7 +44,8 @@ class PandasTableRepository:
         Args:
             data_frame: The pandas DataFrame to wrap
             table_type: Table type identifier (measurement, parameter, etc.)
-            allowed_columns: Column definitions (defaults to C.COLUMNS[table_type])
+            allowed_columns: Column definitions (defaults to
+                C.COLUMNS[table_type])
         """
         self._data_frame = data_frame
         self._table_type = table_type
@@ -273,7 +277,8 @@ class PandasTableRepository:
         return self._table_type
 
     # DataFrame access (for backward compatibility and bulk operations)
-    # NOTE: data_frame property is defined below in "Additional helper methods" section
+    # NOTE: data_frame property is defined below in
+    # "Additional helper methods" section
 
     # Validation
     def get_invalid_cells(self) -> dict[tuple[int, str], str]:
@@ -322,8 +327,9 @@ class PandasTableRepository:
     def data_frame(self) -> pd.DataFrame:
         """Direct access to underlying DataFrame (for migration period).
 
-        This property exists to ease the transition from direct DataFrame access.
-        In the long term, all access should go through repository methods.
+        This property exists to ease the transition from direct DataFrame
+        access. In the long term, all access should go through repository
+        methods.
         """
         return self._data_frame
 
@@ -331,8 +337,8 @@ class PandasTableRepository:
     def data_frame(self, new_df: pd.DataFrame) -> None:
         """Set the underlying DataFrame and clear invalid cell tracking.
 
-        When controllers assign a new DataFrame, we need to update the repository's
-        internal state and clear invalid cell tracking.
+        When controllers assign a new DataFrame, we need to update the
+        repository's internal state and clear invalid cell tracking.
         """
         self._data_frame = new_df
         self._invalid_cells.clear()

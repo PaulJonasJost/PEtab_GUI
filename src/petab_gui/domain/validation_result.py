@@ -37,14 +37,17 @@ class ValidationResult:
     Attributes:
         level: Severity level (VALID, WARNING, ERROR)
         message: Human-readable error/warning message (None if valid)
-        suggestions: List of suggested corrections (e.g., similar valid values)
+        suggestions: List of suggested corrections (e.g., similar valid
+            values)
         field_name: Name of the field that was validated
-        expected_type: Expected type/format description (e.g., "float", "reference to Observable")
+        expected_type: Expected type/format description (e.g., "float",
+            "reference to Observable")
 
     Example:
         >>> result = ValidationResult(
         ...     level=ValidationLevel.ERROR,
-        ...     message="observableId 'obs_typo' not found in observable table",
+        ...     message="observableId 'obs_typo' not found in observable "
+        ...            "table",
         ...     suggestions=["obs1", "obs2"],
         ...     field_name="observableId",
         ...     expected_type="reference to Observable"

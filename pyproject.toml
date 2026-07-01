@@ -101,5 +101,8 @@ lint.ignore = [
     "A001", # Variable `copyright` is shadowing a Python builtin
 
 ]
+"tests/**/*.py" = [
+    "S101", # Use of assert detected (allowed in tests)
+]
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"

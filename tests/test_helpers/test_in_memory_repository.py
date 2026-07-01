@@ -12,7 +12,7 @@ class TestInMemoryRepository:
         """Test adding and retrieving rows."""
         repo = in_memory_parameter_repository
 
-        row_id = repo.add_row(
+        _row_id = repo.add_row(
             {"parameterId": "k1", "nominalValue": 1.0, "estimate": 1}
         )
 

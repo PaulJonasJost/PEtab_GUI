@@ -192,7 +192,8 @@ class PandasTableModel(QAbstractTableModel):
                     return f"New {self.table_type}"
                 return ""
             if column == 0 and self._has_named_index:
-                # Index access still needs DataFrame for now (named index handling)
+                # Index access still needs DataFrame for now
+                # (named index handling)
                 value = self._data_frame.index[row]
                 return str(value)
             col_name = self.repository.column_names()[
@@ -573,7 +574,8 @@ class PandasTableModel(QAbstractTableModel):
                 model_idx = self.index(row, col_idx)
                 self.dataChanged.emit(model_idx, model_idx, [Qt.DisplayRole])
 
-        # Also replace in the index (still needs DataFrame for named index handling)
+        # Also replace in the index (still needs DataFrame for named
+        # index handling)
         if self._has_named_index and old_text in self._data_frame.index:
             self._data_frame.rename(index={old_text: new_text}, inplace=True)
             index_row = self._data_frame.index.get_loc(new_text)
@@ -601,8 +603,9 @@ class PandasTableModel(QAbstractTableModel):
         backward compatibility for code that directly accesses _data_frame.
         Repository is the source of truth.
 
-        Note: Direct DataFrame access is discouraged. Use repository methods instead.
-        This property will be deprecated once migration to PEtab v2.0 is complete.
+        Note: Direct DataFrame access is discouraged. Use repository methods
+        instead. This property will be deprecated once migration to PEtab
+        v2.0 is complete.
         """
         return self.repository.data_frame
 
@@ -610,10 +613,12 @@ class PandasTableModel(QAbstractTableModel):
     def _data_frame(self, new_df):
         """Update the repository's DataFrame when _data_frame is assigned.
 
-        TRANSITIONAL: This setter ensures controllers using model._data_frame = new_df
-        properly update the repository. Direct assignment bypasses validation.
+        TRANSITIONAL: This setter ensures controllers using
+        model._data_frame = new_df properly update the repository. Direct
+        assignment bypasses validation.
 
-        Warning: This will be deprecated. Use repository.replace_data() instead.
+        Warning: This will be deprecated. Use repository.replace_data()
+        instead.
         """
         self.repository.data_frame = new_df
 

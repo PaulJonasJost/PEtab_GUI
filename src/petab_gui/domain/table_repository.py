@@ -20,9 +20,9 @@ from .validation_result import ValidationResult
 class TableRepository(Protocol):
     """Generic repository for table data access.
 
-    This is the seam where data access abstraction happens. Controllers interact
-    through this interface, allowing us to swap implementations (pandas →
-    pydantic) without changing controller code.
+    This is the seam where data access abstraction happens. Controllers
+    interact through this interface, allowing us to swap implementations
+    (pandas → pydantic) without changing controller code.
 
     Adapters that implement this protocol:
     - PandasTableRepository: wraps pandas DataFrame
@@ -147,10 +147,10 @@ class TableRepository(Protocol):
     def set_cell(self, row: int, column: str, value: Any) -> ValidationResult:
         """Set cell value (always succeeds, validates and tracks invalids).
 
-        This method uses permissive validation - it accepts any input and stores
-        it, but returns a ValidationResult indicating whether the value is valid.
-        Invalid cells are tracked internally and can be retrieved via
-        get_invalid_cells().
+        This method uses permissive validation - it accepts any input and
+        stores it, but returns a ValidationResult indicating whether the
+        value is valid. Invalid cells are tracked internally and can be
+        retrieved via get_invalid_cells().
 
         Args:
             row: Zero-based row position
@@ -158,7 +158,8 @@ class TableRepository(Protocol):
             value: New value (any type accepted)
 
         Returns:
-            ValidationResult with level (VALID/WARNING/ERROR), message, suggestions
+            ValidationResult with level (VALID/WARNING/ERROR), message,
+            suggestions
 
         Example:
             >>> result = repo.set_cell(0, 'nominalValue', 'abc')
@@ -179,7 +180,9 @@ class TableRepository(Protocol):
             New row ID (value of the ID column)
 
         Example:
-            >>> row_id = repo.add_row({'parameterId': 'k2', 'nominalValue': 2.0})
+            >>> row_id = repo.add_row(
+            ...     {'parameterId': 'k2', 'nominalValue': 2.0}
+            ... )
             >>> print(row_id)  # 'k2'
         """
         ...
@@ -274,7 +277,8 @@ class TableRepository(Protocol):
         """Get table type.
 
         Returns:
-            Table type identifier (e.g., 'measurement', 'parameter', 'observable')
+            Table type identifier (e.g., 'measurement', 'parameter',
+            'observable')
         """
         ...
 

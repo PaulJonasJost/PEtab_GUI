@@ -89,8 +89,8 @@ class InMemoryTableRepository:
         """Get column position from name."""
         try:
             return self.columns.index(column_name)
-        except ValueError:
-            raise KeyError(f"Column not found: {column_name}")
+        except ValueError as e:
+            raise KeyError(f"Column not found: {column_name}") from e
 
     # Cell access
     def get_cell(self, row: int, column: str) -> Any:

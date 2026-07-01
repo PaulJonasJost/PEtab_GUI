@@ -249,7 +249,8 @@ class TestColumnMutations:
         self, parameter_repository
     ):
         """Test delete_column clears invalid cell tracking."""
-        # Mark cell as invalid - use nominalValue which will definitely be invalid with a string
+        # Mark cell as invalid - use nominalValue which will definitely be
+        # invalid with a string
         parameter_repository.set_cell(0, "nominalValue", "definitely_invalid")
         assert (0, "nominalValue") in parameter_repository.get_invalid_cells()
 
@@ -324,8 +325,8 @@ class TestBulkOperations:
         """Test replace_text can replace in index values."""
         changed = parameter_repository.replace_text("k1", "param1")
 
-        # Check that replacement happened (even if index replacement may not be supported)
-        # Just verify that something changed
+        # Check that replacement happened (even if index replacement may
+        # not be supported). Just verify that something changed
         assert isinstance(changed, list)
 
     def test_replace_text_returns_changed_positions(
