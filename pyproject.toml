@@ -41,6 +41,10 @@ doc = [
     "sphinx-design",
     "sphinxcontrib-youtube",
 ]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
 
 [project.urls]
 Repository = "https://github.com/PEtab-dev/PEtabGUI"
@@ -106,3 +110,19 @@ lint.ignore = [
 ]
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+filterwarnings = [
+    "ignore::FutureWarning",
+    "ignore::DeprecationWarning",
+]
