@@ -270,7 +270,7 @@ class TableController(QObject):
         for row in sorted(selected_rows, reverse=True):
             if row >= self.model.rowCount() - 1:
                 continue
-            row_info = self.model.get_df().iloc[row].to_dict()
+            row_info = self.model.repository.get_row(row)
             self.model.delete_row(row)
             self.logger.log_message(
                 f"Deleted row {row} from {self.model.table_type} table."
@@ -527,48 +527,132 @@ class TableController(QObject):
             self.model.highlighted_cells.discard((row, col))
             self.model.dataChanged.emit(index, index, [Qt.DisplayRole])
 
+    @staticmethod
+    def _find_and_replace_in_text(
+        text: str,
+        search: str,
+        replace: str,
+        case_sensitive: bool,
+        use_regex: bool,
+    ) -> tuple[bool, str]:
+        """Find and replace text with given options.
+
+        Args:
+            text: The text to search in
+            search: The search pattern
+            replace: The replacement text
+            case_sensitive: Whether to match case
+            use_regex: Whether to use regex matching
+
+        Returns:
+            Tuple of (matched, new_text) where matched indicates if
+            replacement occurred
+        """
+        if use_regex:
+            pattern = re.compile(
+                search, 0 if case_sensitive else re.IGNORECASE
+            )
+            new_text = pattern.sub(replace, text)
+            return new_text != text, new_text
+
+        # Non-regex replacement
+        if case_sensitive:
+            matched = search in text
+            new_text = text.replace(search, replace) if matched else text
+        else:
+            matched = search.lower() in text.lower()
+            new_text = (
+                re.sub(re.escape(search), replace, text, flags=re.IGNORECASE)
+                if matched
+                else text
+            )
+
+        return matched, new_text
+
     def replace_all(
         self, search_text, replace_text, case_sensitive=False, regex=False
     ):
-        """Replace all occurrences of the search term in the Model."""
+        """Replace all occurrences of search term in Model with undo.
+
+        Replace all occurrences of the search term in the Model with undo
+        support.
+        """
         if not search_text or not replace_text:
             return
 
-        df = self.model._data_frame
-        if regex:
-            pattern = re.compile(
-                search_text, 0 if case_sensitive else re.IGNORECASE
-            )
-            df.replace(
-                to_replace=pattern,
-                value=replace_text,
-                regex=True,
-                inplace=True,
-            )
-        else:
-            if not case_sensitive:
-                df.replace(
-                    to_replace=re.escape(search_text),
-                    value=replace_text,
-                    regex=True,
-                    inplace=True,
-                )
+        from ..commands import ModifyDataFrameCommand
+
+        # Find all matching cells using repository
+        matches = self.model.repository.find_cells(
+            search_text, regex=regex, case_sensitive=case_sensitive
+        )
+
+        # Process all matches in a single pass
+        changes = {}  # {(row_id, col_name): (old_val, new_val)}
+        index_renames = []  # [(old_id, new_id, row_idx)]
+
+        for row_idx, col_name, old_val in matches:
+            if col_name == "_index_":
+                # Handle index matches
+                if self.model._has_named_index:
+                    matched, new_str = self._find_and_replace_in_text(
+                        str(old_val),
+                        search_text,
+                        replace_text,
+                        case_sensitive,
+                        regex,
+                    )
+                    if matched and new_str != str(old_val):
+                        index_renames.append((old_val, new_str, row_idx))
             else:
-                df.replace(
-                    to_replace=search_text, value=replace_text, inplace=True
+                # Handle cell matches
+                if not pd.isna(old_val):
+                    matched, new_str = self._find_and_replace_in_text(
+                        str(old_val),
+                        search_text,
+                        replace_text,
+                        case_sensitive,
+                        regex,
+                    )
+                    if matched and new_str != str(old_val):
+                        row_id = self.model.repository.get_row_id(row_idx)
+                        changes[(row_id, col_name)] = (old_val, new_str)
+
+        # Create undo command(s)
+        if changes or index_renames:
+            if self.model.undo_stack:
+                # Use macro to group cell changes + index renames into
+                # one undo operation
+                self.model.undo_stack.beginMacro(
+                    f"Replace '{search_text}' with '{replace_text}'"
                 )
 
-        # Replace in the index as well
-        if isinstance(df.index, pd.Index) and df.index.name:
-            index_map = {
-                idx: pattern.sub(replace_text, str(idx))
-                if regex
-                else str(idx).replace(search_text, replace_text)
-                for idx in df.index
-                if search_text in str(idx)
-            }
-            if index_map:
-                df.rename(index=index_map, inplace=True)
+                # Push cell changes command
+                if changes:
+                    command = ModifyDataFrameCommand(
+                        self.model, changes, "Replace in cells"
+                    )
+                    self.model.undo_stack.push(command)
+
+                # Push index rename commands
+                if index_renames:
+                    from ..commands import RenameIndexCommand
+
+                    for old_id, new_id, row_idx in index_renames:
+                        model_index = self.model.index(row_idx, 0)
+                        cmd = RenameIndexCommand(
+                            self.model, old_id, new_id, model_index
+                        )
+                        self.model.undo_stack.push(cmd)
+
+                self.model.undo_stack.endMacro()
+            else:
+                # Fallback: apply changes directly if no undo stack
+                for (row_id, col_name), (_old_val, new_val) in changes.items():
+                    row_pos = self.model.repository.get_row_position(row_id)
+                    self.model.repository.set_cell(row_pos, col_name, new_val)
+                for old_id, new_id, _ in index_renames:
+                    self.model.repository.rename_index(old_id, new_id)
 
     def get_columns(self):
         """Get the columns of the table."""
@@ -987,7 +1071,7 @@ class MeasurementController(TableController):
         # check number of rows and signal row insertion
         rows = data_matrix.shape[0]
         # get current number of rows
-        current_rows = self.model.get_df().shape[0]
+        current_rows = self.model.repository.row_count()
         self.model.insertRows(
             position=None, rows=rows
         )  # Fills the table with empty rows
@@ -1008,7 +1092,8 @@ class MeasurementController(TableController):
                     petab.C.PREEQUILIBRATION_CONDITION_ID: preeq_id,
                 },
             )
-        bottom, right = (x - 1 for x in self.model.get_df().shape)
+        bottom = self.model.repository.row_count() - 1
+        right = len(self.model.repository.column_names()) - 1
         bottom_right = self.model.createIndex(bottom, right)
         self.model.dataChanged.emit(top_left, bottom_right)
         self.logger.log_message(
@@ -1138,16 +1223,19 @@ class ConditionController(TableController):
 
     def maybe_add_condition(self, condition_id, old_id=None):
         """Add a condition to the condition table if it does not exist yet."""
-        if condition_id in self.model.get_df().index or not condition_id:
+        if (
+            self.model.repository.get_row_by_id(condition_id)
+            or not condition_id
+        ):
             return
         # add a row
         self.model.insertRows(position=None, rows=1)
         self.model.fill_row(
-            self.model.get_df().shape[0] - 1,
+            self.model.repository.row_count() - 1,
             data={petab.C.CONDITION_ID: condition_id},
         )
         self.model.cell_needs_validation.emit(
-            self.model.get_df().shape[0] - 1, 0
+            self.model.repository.row_count() - 1, 0
         )
         self.logger.log_message(
             f"Automatically added condition '{condition_id}' to the condition "
@@ -1169,7 +1257,7 @@ class ConditionController(TableController):
             table_view.setItemDelegateForColumn(
                 conditionName_index, self.completers[petab.C.CONDITION_NAME]
             )
-        for column in self.model.get_df().columns:
+        for column in self.model.repository.column_names():
             if column in [petab.C.CONDITION_ID, petab.C.CONDITION_NAME]:
                 continue
             column_index = self.model.return_column_index(column)
@@ -1292,16 +1380,19 @@ class ObservableController(TableController):
 
         Currently, `old_id` is not used.
         """
-        if observable_id in self.model.get_df().index or not observable_id:
+        if (
+            self.model.repository.get_row_by_id(observable_id)
+            or not observable_id
+        ):
             return
         # add a row
         self.model.insertRows(position=None, rows=1)
         self.model.fill_row(
-            self.model.get_df().shape[0] - 1,
+            self.model.repository.row_count() - 1,
             data={petab.C.OBSERVABLE_ID: observable_id},
         )
         self.model.cell_needs_validation.emit(
-            self.model.get_df().shape[0] - 1, 0
+            self.model.repository.row_count() - 1, 0
         )
         self.logger.log_message(
             f"Automatically added observable '{observable_id}' to the "

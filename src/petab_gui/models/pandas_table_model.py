@@ -11,6 +11,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QBrush, QColor, QPalette
 
+from ..adapters import PandasTableRepository
 from ..C import COLUMNS
 from ..commands import (
     ModifyColumnCommand,
@@ -103,7 +104,14 @@ class PandasTableModel(QAbstractTableModel):
         self._has_named_index = False
         if data_frame is None:
             data_frame = create_empty_dataframe(allowed_columns, table_type)
-        self._data_frame = data_frame
+
+        # Phase 2: Create repository (wraps DataFrame)
+        # Repository is the source of truth for data
+        self.repository = PandasTableRepository(
+            data_frame, table_type, allowed_columns
+        )
+        # Note: _data_frame is now a property that delegates to repository
+
         # add a view here, access is needed for selectionModels
         self.view = None
         # offset for row and column to get from the data_frame to the view
@@ -134,7 +142,7 @@ class PandasTableModel(QAbstractTableModel):
         """
         if parent is None:
             parent = QModelIndex()
-        return self._data_frame.shape[0] + 1  # empty row at the end
+        return self.repository.row_count() + 1  # empty row at the end
 
     def columnCount(self, parent=None):
         """Return the number of columns in the model.
@@ -149,7 +157,7 @@ class PandasTableModel(QAbstractTableModel):
         """
         if parent is None:
             parent = QModelIndex()
-        return self._data_frame.shape[1] + self.column_offset
+        return len(self.repository.column_names()) + self.column_offset
 
     def data(self, index, role=Qt.DisplayRole):
         """Return the data at the given index and role for the View.
@@ -170,21 +178,28 @@ class PandasTableModel(QAbstractTableModel):
             return None
         row, column = index.row(), index.column()
         if role == Qt.WhatsThisRole:
-            if row == self._data_frame.shape[0]:
+            if row == self.repository.row_count():
                 return "Add a new row."
             if column == 0 and self._has_named_index:
                 return None
-            col_label = self._data_frame.columns[column - self.column_offset]
+            col_label = self.repository.column_names()[
+                column - self.column_offset
+            ]
             return column_whats_this(self.table_type, col_label)
         if role == Qt.DisplayRole or role == Qt.EditRole:
-            if row == self._data_frame.shape[0]:
+            if row == self.repository.row_count():
                 if column == 0:
                     return f"New {self.table_type}"
                 return ""
             if column == 0 and self._has_named_index:
+                # Index access still needs DataFrame for now
+                # (named index handling)
                 value = self._data_frame.index[row]
                 return str(value)
-            value = self._data_frame.iloc[row, column - self.column_offset]
+            col_name = self.repository.column_names()[
+                column - self.column_offset
+            ]
+            value = self.repository.get_cell(row, col_name)
             if is_invalid(value):
                 return ""
             return str(value)
@@ -196,10 +211,13 @@ class PandasTableModel(QAbstractTableModel):
                 return self._highlight_fg_color
             return QBrush(QColor(0, 0, 0))  # Default black text
         if role == Qt.ToolTipRole:
-            if row == self._data_frame.shape[0]:
+            if row == self.repository.row_count():
                 return "Add a new row"
-            col_label = self._data_frame.columns[column - self.column_offset]
+            col_label = self.repository.column_names()[
+                column - self.column_offset
+            ]
             if column == 0 and self._has_named_index:
+                # Index name still needs DataFrame for now
                 col_label = self._data_frame.index.name
             return cell_tip(self.table_type, col_label)
         return None
@@ -239,9 +257,10 @@ class PandasTableModel(QAbstractTableModel):
             return None
         if orientation == Qt.Horizontal:
             if section == 0 and self._has_named_index:
+                # Index name still needs DataFrame (named index handling)
                 col_label = self._data_frame.index.name
             else:
-                col_label = self._data_frame.columns[
+                col_label = self.repository.column_names()[
                     section - self.column_offset
                 ]
             if role == Qt.ToolTipRole:
@@ -293,7 +312,7 @@ class PandasTableModel(QAbstractTableModel):
             If the column is not in the allowed columns list, a warning message
             is emitted but the column is still added.
         """
-        if column_name in self._data_frame.columns:
+        if column_name in self.repository.column_names():
             self.new_log_message.emit(
                 f"Column '{column_name}' already exists", "red"
             )
@@ -381,7 +400,7 @@ class PandasTableModel(QAbstractTableModel):
         fill_with_defaults = False
 
         # Handle new row creation
-        if row == self._data_frame.shape[0]:
+        if row == self.repository.row_count():
             self.insertRows(row, 1)
             fill_with_defaults = True
             next_index = self.index(row, 0)
@@ -395,8 +414,10 @@ class PandasTableModel(QAbstractTableModel):
             self.cell_needs_validation.emit(row, column)
             return return_this
 
-        column_name = self._data_frame.columns[column - self.column_offset]
-        old_value = self._data_frame.iloc[row, column - self.column_offset]
+        column_name = self.repository.column_names()[
+            column - self.column_offset
+        ]
+        old_value = self.repository.get_cell(row, column_name)
 
         # Handle invalid value
         if is_invalid(value):
@@ -538,26 +559,24 @@ class PandasTableModel(QAbstractTableModel):
             old_text: The text to search for
             new_text: The text to replace it with
         """
-        # find all occurrences of old_text and save indices
-        mask = self._data_frame.eq(old_text)
-        if mask.any().any():
-            self._data_frame.replace(old_text, new_text, inplace=True)
-            # Get first and last modified cell for efficient `dataChanged` emit
-            changed_cells = mask.stack()[
-                mask.stack()
-            ].index.tolist()  # Extract (row, col) pairs
-            if changed_cells:
-                first_row, first_col = changed_cells[0]
-                last_row, last_col = changed_cells[-1]
+        # Use repository's replace_text method which returns changed positions
+        changed_positions = self.repository.replace_text(old_text, new_text)
+
+        if changed_positions:
+            # Get column name to index mapping
+            column_names = self.repository.column_names()
+
+            # Convert (row, col_name) to view indices and emit signals
+            for row, col_name in changed_positions:
+                col_idx = column_names.index(col_name)
                 if self._has_named_index:
-                    first_col += 1
-                    last_col += 1
-                top_left = self.index(first_row, first_col)
-                bottom_right = self.index(last_row, last_col)
-                self.dataChanged.emit(top_left, bottom_right, [Qt.DisplayRole])
-        # also replace in the index
+                    col_idx += 1
+                model_idx = self.index(row, col_idx)
+                self.dataChanged.emit(model_idx, model_idx, [Qt.DisplayRole])
+
+        # Also replace in the index using repository
         if self._has_named_index and old_text in self._data_frame.index:
-            self._data_frame.rename(index={old_text: new_text}, inplace=True)
+            self.repository.rename_index(old_text, new_text)
             index_row = self._data_frame.index.get_loc(new_text)
             index_top_left = self.index(index_row, 0)
             index_bottom_right = self.index(index_row, 0)
@@ -574,6 +593,33 @@ class PandasTableModel(QAbstractTableModel):
             pd.DataFrame: The DataFrame containing the table data
         """
         return self._data_frame
+
+    @property
+    def _data_frame(self):
+        """Property that delegates to repository's DataFrame.
+
+        TRANSITIONAL: During migration to repository pattern, this provides
+        backward compatibility for code that directly accesses _data_frame.
+        Repository is the source of truth.
+
+        Note: Direct DataFrame access is discouraged. Use repository methods
+        instead. This property will be deprecated once migration to PEtab
+        v2.0 is complete.
+        """
+        return self.repository.data_frame
+
+    @_data_frame.setter
+    def _data_frame(self, new_df):
+        """Update the repository's DataFrame when _data_frame is assigned.
+
+        TRANSITIONAL: This setter ensures controllers using
+        model._data_frame = new_df properly update the repository. Direct
+        assignment bypasses validation.
+
+        Warning: This will be deprecated. Use repository.replace_data()
+        instead.
+        """
+        self.repository.data_frame = new_df
 
     def add_invalid_cell(self, row, column):
         """Mark a cell as invalid, giving it a special background color.
@@ -685,10 +731,11 @@ class PandasTableModel(QAbstractTableModel):
             The value at the specified column and row, or an empty string
         """
         # if row is a new row return ""
-        if row == self._data_frame.shape[0]:
+        if row == self.repository.row_count():
             return ""
-        if column_name in self._data_frame.columns:
-            return self._data_frame.loc[row, column_name]
+        if column_name in self.repository.column_names():
+            return self.repository.get_cell(row, column_name)
+        # Index access still needs DataFrame (named index handling)
         if column_name == self._data_frame.index.name:
             return self._data_frame.index[row]
         return ""
@@ -706,8 +753,9 @@ class PandasTableModel(QAbstractTableModel):
         Returns:
             int: The view column index for the given column name, or -1
         """
-        if column_name in self._data_frame.columns:
-            return self._data_frame.columns.get_loc(column_name)
+        column_names = self.repository.column_names()
+        if column_name in column_names:
+            return column_names.index(column_name)
         return -1
 
     def unique_values(self, column_name):
@@ -722,8 +770,15 @@ class PandasTableModel(QAbstractTableModel):
         Returns:
             list: A list of unique values from the column, or an empty list
         """
-        if column_name in self._data_frame.columns:
-            return list(self._data_frame[column_name].dropna().unique())
+        if column_name in self.repository.column_names():
+            # Get all unique values from repository
+            unique_vals = set()
+            for row_data in self.repository.get_all_rows():
+                value = row_data.get(column_name)
+                if value is not None and value != "":
+                    unique_vals.add(value)
+            return list(unique_vals)
+        # Index access still needs DataFrame (named index handling)
         if column_name == self._data_frame.index.name:
             return list(self._data_frame.index.dropna().unique())
         return []
@@ -754,7 +809,7 @@ class PandasTableModel(QAbstractTableModel):
         Args:
             column_index: The view index of the column to delete
         """
-        column_name = self._data_frame.columns[
+        column_name = self.repository.column_names()[
             column_index - self.column_offset
         ]
         if self.undo_stack:
@@ -767,14 +822,14 @@ class PandasTableModel(QAbstractTableModel):
     def clear_table(self):
         """Clear all data from the table."""
         self.beginResetModel()
-        self._data_frame.drop(self._data_frame.index, inplace=True)
-        self._data_frame.drop(
-            self._data_frame.columns.difference(
-                COLUMNS[self.table_type].keys()
-            ),
-            axis=1,
-            inplace=True,
-        )
+        # Clear all rows using repository
+        self.repository.clear_all_rows()
+        # Remove columns not in the required set
+        required_columns = set(COLUMNS[self.table_type].keys())
+        current_columns = set(self.repository.column_names())
+        columns_to_remove = current_columns - required_columns
+        for col in columns_to_remove:
+            self.repository.delete_column(col)
         self.endResetModel()
 
     def check_selection(self):
@@ -886,10 +941,11 @@ class PandasTableModel(QAbstractTableModel):
             start_row: The row index where data insertion begins
             n_rows: The number of rows needed for the data
         """
-        if start_row + n_rows > self._data_frame.shape[0]:
+        current_row_count = self.repository.row_count()
+        if start_row + n_rows > current_row_count:
             self.insertRows(
-                self._data_frame.shape[0],
-                start_row + n_rows - self._data_frame.shape[0],
+                current_row_count,
+                start_row + n_rows - current_row_count,
             )
 
     def determine_background_color(self, row, column):
@@ -908,7 +964,7 @@ class PandasTableModel(QAbstractTableModel):
         Returns:
             QColor: The background color to use for the cell
         """
-        if (row, column) == (self._data_frame.shape[0], 0):
+        if (row, column) == (self.repository.row_count(), 0):
             return QColor(144, 238, 144, 150)
         if (row, column) in self.highlighted_cells:
             return self._highlight_bg_color
@@ -935,8 +991,11 @@ class PandasTableModel(QAbstractTableModel):
                 - str: The name of the column
         """
         if column == 0 and self._has_named_index:
+            # Index name still needs DataFrame (named index handling)
             return False, self._data_frame.index.name
-        column_name = self._data_frame.columns[column - self.column_offset]
+        column_name = self.repository.column_names()[
+            column - self.column_offset
+        ]
         if column_name not in self._allowed_columns:
             return True, column_name
         return self._allowed_columns[column_name]["optional"], column_name
@@ -960,32 +1019,38 @@ class PandasTableModel(QAbstractTableModel):
         data:
             The data to fill the row with. Gets updated with default values.
         """
-        data_to_add = dict.fromkeys(self._data_frame.columns, "")
-        unknown_keys = set(data) - set(self._data_frame.columns)
+        column_names = self.repository.column_names()
+        data_to_add = dict.fromkeys(column_names, "")
+        unknown_keys = set(data) - set(column_names)
         index_key = None
         for key in unknown_keys:
+            # Index name still needs DataFrame (named index handling)
             if key == self._data_frame.index.name:
                 index_key = data.pop(key)
                 continue
             data.pop(key, None)
         data_to_add.update(data)
         if index_key and self._has_named_index:
+            # Get current row ID using repository
+            old_row_id = self.repository.get_row_id(row_position)
             self.undo_stack.push(
                 RenameIndexCommand(
                     self,
-                    self._data_frame.index.tolist()[row_position],
+                    old_row_id,
                     index_key,
                     self.index(row_position, 0),
                 )
             )
         if index_key is None:
-            index_key = self._data_frame.index.tolist()[row_position]
+            index_key = self.repository.get_row_id(row_position)
 
-        changes = {
-            (index_key, col): (self._data_frame.at[index_key, col], val)
-            for col, val in data_to_add.items()
-            if val not in [self._data_frame.at[index_key, col], "", None]
-        }
+        # Build changes dict using repository for cell access
+        changes = {}
+        for col, val in data_to_add.items():
+            # Get current cell value using repository
+            old_val = self.repository.get_cell(row_position, col)
+            if val not in [old_val, "", None]:
+                changes[(index_key, col)] = (old_val, val)
         self.undo_stack.push(
             ModifyDataFrameCommand(self, changes, "Fill values")
         )
@@ -1113,8 +1178,10 @@ class IndexedPandasTableModel(PandasTableModel):
 
     def return_column_index(self, column_name):
         """Return the index of a column."""
-        if column_name in self._data_frame.columns:
-            return self._data_frame.columns.get_loc(column_name) + 1
+        column_names = self.repository.column_names()
+        if column_name in column_names:
+            return column_names.index(column_name) + 1
+        # Index name still needs DataFrame (named index handling)
         if column_name == self._data_frame.index.name:
             return 0
         return -1
