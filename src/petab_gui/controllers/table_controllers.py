@@ -582,55 +582,41 @@ class TableController(QObject):
 
         from ..commands import ModifyDataFrameCommand
 
-        # Use repository to find matching cells
-        changes = {}  # Will store {(row_id, col_name): (old_val, new_val)}
-
         # Find all matching cells using repository
         matches = self.model.repository.find_cells(
             search_text, regex=regex, case_sensitive=case_sensitive
         )
 
-        # Process matches and apply replacements
+        # Process all matches in a single pass
+        changes = {}  # {(row_id, col_name): (old_val, new_val)}
+        index_renames = []  # [(old_id, new_id, row_idx)]
+
         for row_idx, col_name, old_val in matches:
-            # Skip index matches for now (handled separately)
             if col_name == "_index_":
-                continue
-
-            if pd.isna(old_val):
-                continue
-
-            matched, new_str = self._find_and_replace_in_text(
-                str(old_val),
-                search_text,
-                replace_text,
-                case_sensitive,
-                regex,
-            )
-
-            if matched and new_str != str(old_val):
-                # Get row_id from repository
-                row_id = self.model.repository.get_row_id(row_idx)
-                changes[(row_id, col_name)] = (old_val, new_str)
-
-        # Replace in the index as well
-        index_renames = []  # Collect index renames for undo support
-        # Check if table has named index
-        if self.model._has_named_index:
-            # Find index matches from find_cells results
-            for row_idx, col_name, row_id in matches:
-                if col_name != "_index_":
-                    continue
-
-                matched, new_str = self._find_and_replace_in_text(
-                    str(row_id),
-                    search_text,
-                    replace_text,
-                    case_sensitive,
-                    regex,
-                )
-
-                if matched and new_str != str(row_id):
-                    index_renames.append((row_id, new_str, row_idx))
+                # Handle index matches
+                if self.model._has_named_index:
+                    matched, new_str = self._find_and_replace_in_text(
+                        str(old_val),
+                        search_text,
+                        replace_text,
+                        case_sensitive,
+                        regex,
+                    )
+                    if matched and new_str != str(old_val):
+                        index_renames.append((old_val, new_str, row_idx))
+            else:
+                # Handle cell matches
+                if not pd.isna(old_val):
+                    matched, new_str = self._find_and_replace_in_text(
+                        str(old_val),
+                        search_text,
+                        replace_text,
+                        case_sensitive,
+                        regex,
+                    )
+                    if matched and new_str != str(old_val):
+                        row_id = self.model.repository.get_row_id(row_idx)
+                        changes[(row_id, col_name)] = (old_val, new_str)
 
         # Create undo command(s)
         if changes or index_renames:

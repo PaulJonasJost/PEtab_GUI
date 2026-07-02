@@ -197,10 +197,10 @@ class ModifyRowCommand(QUndoCommand):
         """Generate default row indices based on table type and index type."""
         base = 0
         # Get existing indices through repository
-        existing = set()
-        for row_idx in range(self.model.repository.row_count()):
-            row_id = self.model.repository.get_row_id(row_idx)
-            existing.add(str(row_id))
+        existing = {
+            str(self.model.repository.get_row_id(i))
+            for i in range(self.model.repository.row_count())
+        }
 
         indices = []
         while len(indices) < count:
@@ -226,22 +226,16 @@ class ModifyRowCommand(QUndoCommand):
                 QModelIndex(), position, position + len(self.row_indices) - 1
             )
 
-            # Add rows through DataFrame (repository doesn't support custom
-            # index yet)
-            df = self.model._data_frame
-            dtypes = df.dtypes.copy()
-
+            # Add rows with custom indices using repository
             for idx in self.row_indices:
-                # Repository doesn't support custom index yet, use DataFrame
-                df.loc[idx] = [np.nan] * df.shape[1]
-
-            # Restore dtypes
-            if np.any(dtypes != df.dtypes):
-                for col, dtype in dtypes.items():
-                    if dtype != df.dtypes[col]:
-                        df[col] = _convert_dtype_with_nullable_int(
-                            df[col], dtype
-                        )
+                # Create empty row data
+                row_data = dict.fromkeys(
+                    self.model.repository.column_names(), np.nan
+                )
+                # Add row with custom ID and preserve dtypes
+                self.model.repository.add_row_with_id(
+                    str(idx), row_data, preserve_dtypes=True
+                )
 
             self.model.endInsertRows()
         else:
@@ -262,8 +256,6 @@ class ModifyRowCommand(QUndoCommand):
         If the original command was to add rows, this removes them.
         If the original command was to remove rows, this restores them.
         """
-        df = self.model._data_frame
-
         if self.add_mode:
             # Remove the rows we added
             positions = [
@@ -281,30 +273,20 @@ class ModifyRowCommand(QUndoCommand):
 
             self.model.endRemoveRows()
         else:
-            # Restore deleted rows
+            # Restore deleted rows at original positions
             self.model.beginInsertRows(
                 QModelIndex(), min(self.row_indices), max(self.row_indices)
             )
 
-            # Restore rows at original positions
-            # This requires DataFrame manipulation for index ordering
-            restore_index_order = df.index
+            # Restore rows at exact original positions with original IDs
             for pos, index_name, row_data in zip(
                 self.row_indices,
                 self.old_ind_names,
                 self.old_rows,
                 strict=False,
             ):
-                restore_index_order = restore_index_order.insert(
-                    pos, index_name
-                )
-                # Restore row - use DataFrame for positioning
-                df.loc[index_name] = [
-                    row_data.get(col, "") for col in df.columns
-                ]
-                df.sort_index(
-                    inplace=True,
-                    key=lambda x: x.map(restore_index_order.get_loc),
+                self.model.repository.restore_row_at_position(
+                    pos, index_name, row_data
                 )
 
             self.model.endInsertRows()
@@ -420,8 +402,7 @@ class RenameIndexCommand(QUndoCommand):
             src: The source index name to rename
             dst: The destination index name
         """
-        df = self.model._data_frame
-        df.rename(index={src: dst}, inplace=True)
+        self.model.repository.rename_index(src, dst)
         self.model.dataChanged.emit(
             self.model_index, self.model_index, [Qt.DisplayRole]
         )

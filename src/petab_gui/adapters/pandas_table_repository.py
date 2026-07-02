@@ -213,9 +213,7 @@ class PandasTableRepository:
             dtypes = self._data_frame.dtypes.copy()
 
         # Fill missing columns with empty string
-        new_row = {}
-        for col in self._data_frame.columns:
-            new_row[col] = data.get(col, "")
+        new_row = {col: data.get(col, "") for col in self._data_frame.columns}
 
         # Add row with custom index
         new_df_row = pd.DataFrame([new_row], index=[row_id])
@@ -239,44 +237,28 @@ class PandasTableRepository:
     ) -> None:
         """Restore row at exact position with specific ID."""
         # Fill missing columns with empty string
-        new_row = {}
-        for col in self._data_frame.columns:
-            new_row[col] = data.get(col, "")
-
-        # Create new row
+        new_row = {col: data.get(col, "") for col in self._data_frame.columns}
         new_df_row = pd.DataFrame([new_row], index=[row_id])
 
-        # Split DataFrame at position and insert
+        # Determine parts to concatenate based on position
         if position == 0:
-            # Insert at beginning
-            self._data_frame = pd.concat(
-                [new_df_row, self._data_frame], ignore_index=False
-            )
+            parts = [new_df_row, self._data_frame]
         elif position >= len(self._data_frame):
-            # Insert at end
-            self._data_frame = pd.concat(
-                [self._data_frame, new_df_row], ignore_index=False
-            )
+            parts = [self._data_frame, new_df_row]
         else:
-            # Insert in middle
-            before = self._data_frame.iloc[:position]
-            after = self._data_frame.iloc[position:]
-            self._data_frame = pd.concat(
-                [before, new_df_row, after], ignore_index=False
-            )
+            parts = [
+                self._data_frame.iloc[:position],
+                new_df_row,
+                self._data_frame.iloc[position:],
+            ]
+
+        self._data_frame = pd.concat(parts, ignore_index=False)
 
     def rename_index(self, old_id: str, new_id: str) -> None:
         """Rename row identifier."""
         if old_id in self._data_frame.index:
             self._data_frame.rename(index={old_id: new_id}, inplace=True)
-
-            # Update invalid cells tracking
-            updated_invalid = {}
-            for (r, c), msg in self._invalid_cells.items():
-                # Row indices in _invalid_cells are positions, not IDs
-                # So we don't need to update them
-                updated_invalid[(r, c)] = msg
-            self._invalid_cells = updated_invalid
+            # Note: Invalid cells use row positions (not IDs), no update needed
 
     # Column mutations
     def add_column(self, column_name: str, default_value: Any = "") -> None:
@@ -353,11 +335,17 @@ class PandasTableRepository:
         """Find all cells matching pattern."""
         import re as regex_module
 
-        matches = []
+        def matches_pattern(text: str) -> bool:
+            """Check if text matches the search pattern."""
+            if regex:
+                flags = 0 if case_sensitive else regex_module.IGNORECASE
+                return bool(regex_module.search(pattern, text, flags))
+            # Simple string matching
+            if case_sensitive:
+                return pattern in text
+            return pattern.lower() in text.lower()
 
-        # Prepare pattern for matching
-        if not case_sensitive and not regex:
-            pattern_lower = pattern.lower()
+        matches = []
 
         # Search in cells
         for row_idx in range(len(self._data_frame)):
@@ -365,38 +353,13 @@ class PandasTableRepository:
                 value = self._data_frame.iloc[
                     row_idx, self._data_frame.columns.get_loc(col)
                 ]
-                value_str = str(value)
+                if matches_pattern(str(value)):
+                    matches.append((row_idx, col, value))
 
-                # Check for match
-                if regex:
-                    flags = 0 if case_sensitive else regex_module.IGNORECASE
-                    if regex_module.search(pattern, value_str, flags):
-                        matches.append((row_idx, col, value))
-                else:
-                    # Simple string matching
-                    if case_sensitive:
-                        if pattern in value_str:
-                            matches.append((row_idx, col, value))
-                    else:
-                        if pattern_lower in value_str.lower():
-                            matches.append((row_idx, col, value))
-
-        # Also search in index
+        # Search in index
         for row_idx, row_id in enumerate(self._data_frame.index):
-            row_id_str = str(row_id)
-
-            # Check for match in index
-            if regex:
-                flags = 0 if case_sensitive else regex_module.IGNORECASE
-                if regex_module.search(pattern, row_id_str, flags):
-                    matches.append((row_idx, "_index_", row_id))
-            else:
-                if case_sensitive:
-                    if pattern in row_id_str:
-                        matches.append((row_idx, "_index_", row_id))
-                else:
-                    if pattern_lower in row_id_str.lower():
-                        matches.append((row_idx, "_index_", row_id))
+            if matches_pattern(str(row_id)):
+                matches.append((row_idx, "_index_", row_id))
 
         return matches
 
