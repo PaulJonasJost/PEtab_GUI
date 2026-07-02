@@ -210,6 +210,54 @@ class TableRepository(Protocol):
         """
         ...
 
+    def add_row_with_id(
+        self, row_id: str, data: dict, preserve_dtypes: bool = True
+    ) -> None:
+        """Add row with custom identifier and preserve column dtypes.
+
+        Args:
+            row_id: Custom row identifier (for named index tables)
+            data: Row data as dict (column name → value)
+            preserve_dtypes: Whether to preserve existing column dtypes
+                (default: True)
+
+        Notes:
+            Required for undo of delete operations on tables with named indices
+            (parameters, conditions, observables). Ensures dtypes don't change
+            when restoring rows.
+        """
+        ...
+
+    def restore_row_at_position(
+        self, position: int, row_id: str, data: dict
+    ) -> None:
+        """Restore row at exact position with specific ID.
+
+        Args:
+            position: Zero-based position where row should be inserted
+            row_id: Row identifier
+            data: Row data as dict
+
+        Notes:
+            Required for undo/redo to restore rows in exact original order.
+            Unlike add_row(), this preserves both position and ID.
+        """
+        ...
+
+    def rename_index(self, old_id: str, new_id: str) -> None:
+        """Rename row identifier.
+
+        Args:
+            old_id: Current row identifier
+            new_id: New row identifier
+
+        Notes:
+            Required for updating identifiers across tables when user renames
+            a parameter, condition, or observable. Only works on tables with
+            named indices.
+        """
+        ...
+
     # Column mutations
     def add_column(self, column_name: str, default_value: Any = "") -> None:
         """Add column to all rows with default value.
@@ -237,6 +285,24 @@ class TableRepository(Protocol):
         """
         ...
 
+    def insert_column_at(
+        self, position: int, column_name: str, default_value: Any = ""
+    ) -> None:
+        """Insert column at specific position.
+
+        Args:
+            position: Zero-based column position where new column should be
+                inserted
+            column_name: Name of new column
+            default_value: Value to use for all existing rows (default: "")
+
+        Notes:
+            Required for undo/redo to restore exact column order.
+            Position 0 inserts before first column, position N inserts after
+            last.
+        """
+        ...
+
     # Bulk operations
     def clear_all_rows(self) -> None:
         """Remove all rows (keeps columns and structure)."""
@@ -253,6 +319,28 @@ class TableRepository(Protocol):
 
         Returns:
             List of changed (row_index, column_name) positions
+        """
+        ...
+
+    def find_cells(
+        self,
+        pattern: str,
+        regex: bool = False,
+        case_sensitive: bool = False,
+    ) -> list[tuple[int, str, Any]]:
+        """Find all cells matching pattern.
+
+        Args:
+            pattern: Text pattern to search for
+            regex: Whether to use regex matching (default: False)
+            case_sensitive: Whether to match case (default: False)
+
+        Returns:
+            List of (row_index, column_name, cell_value) tuples for all matches
+
+        Notes:
+            Required for find/replace dialog. Searches both cell values and
+            row identifiers.
         """
         ...
 

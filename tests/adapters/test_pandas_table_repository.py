@@ -438,3 +438,246 @@ class TestMetadata:
     def test_table_type_returns_correct_type(self, parameter_repository):
         """Test table_type returns the table type string."""
         assert parameter_repository.table_type() == "parameter"
+
+
+class TestAdvancedRowMutations:
+    """Test advanced row mutation methods for undo/redo support."""
+
+    def test_add_row_with_id_creates_row_with_custom_id(
+        self, parameter_repository
+    ):
+        """Test add_row_with_id creates row with specified ID."""
+        parameter_repository.add_row_with_id(
+            "custom_k", {"nominalValue": 99.0, "estimate": 1}
+        )
+
+        row = parameter_repository.get_row_by_id("custom_k")
+        assert row is not None
+        assert row["nominalValue"] == 99.0
+
+    def test_add_row_with_id_preserves_dtypes(self, parameter_repository):
+        """Test add_row_with_id preserves column dtypes."""
+        original_dtypes = parameter_repository._data_frame.dtypes.copy()
+
+        parameter_repository.add_row_with_id(
+            "k_new", {"nominalValue": 5.0, "estimate": 1}, preserve_dtypes=True
+        )
+
+        # Check dtypes are preserved
+        for col in original_dtypes.index:
+            assert (
+                parameter_repository._data_frame.dtypes[col]
+                == original_dtypes[col]
+            )
+
+    def test_add_row_with_id_fills_missing_columns(self, parameter_repository):
+        """Test add_row_with_id fills missing columns with empty string."""
+        parameter_repository.add_row_with_id(
+            "k_partial", {"nominalValue": 7.0}
+        )
+
+        row = parameter_repository.get_row_by_id("k_partial")
+        assert "estimate" in row
+
+    def test_restore_row_at_position_inserts_at_beginning(
+        self, parameter_repository
+    ):
+        """Test restore_row_at_position inserts at position 0."""
+        row_data = {"nominalValue": 0.5, "estimate": 0}
+
+        parameter_repository.restore_row_at_position(0, "k0", row_data)
+
+        # Check row is at position 0
+        assert parameter_repository.get_row_id(0) == "k0"
+        row = parameter_repository.get_row(0)
+        assert row["nominalValue"] == 0.5
+
+    def test_restore_row_at_position_inserts_in_middle(
+        self, parameter_repository
+    ):
+        """Test restore_row_at_position inserts at middle position."""
+        row_data = {"nominalValue": 1.5, "estimate": 1}
+
+        parameter_repository.restore_row_at_position(1, "k1_5", row_data)
+
+        # Check row is at position 1
+        assert parameter_repository.get_row_id(1) == "k1_5"
+        row = parameter_repository.get_row(1)
+        assert row["nominalValue"] == 1.5
+
+    def test_restore_row_at_position_inserts_at_end(
+        self, parameter_repository
+    ):
+        """Test restore_row_at_position appends at the end."""
+        row_data = {"nominalValue": 99.0, "estimate": 1}
+        end_position = parameter_repository.row_count()
+
+        parameter_repository.restore_row_at_position(
+            end_position, "k_end", row_data
+        )
+
+        # Check row is at the last position
+        assert parameter_repository.get_row_id(end_position) == "k_end"
+        row = parameter_repository.get_row(end_position)
+        assert row["nominalValue"] == 99.0
+
+    def test_rename_index_changes_row_id(self, parameter_repository):
+        """Test rename_index changes row identifier."""
+        parameter_repository.rename_index("k1", "parameter_1")
+
+        # Old ID should not exist
+        assert parameter_repository.get_row_by_id("k1") is None
+        # New ID should exist
+        row = parameter_repository.get_row_by_id("parameter_1")
+        assert row is not None
+        assert row["nominalValue"] == 1.0
+
+    def test_rename_index_handles_nonexistent_id(self, parameter_repository):
+        """Test rename_index handles non-existent ID gracefully."""
+        # Should not raise error
+        parameter_repository.rename_index("nonexistent", "new_name")
+
+        # Nothing should have changed
+        assert parameter_repository.row_count() == 3
+
+    def test_get_row_id_returns_identifier(self, parameter_repository):
+        """Test get_row_id returns row identifier from position."""
+        row_id = parameter_repository.get_row_id(0)
+
+        assert row_id == "k1"
+
+    def test_get_row_id_raises_for_invalid_position(
+        self, parameter_repository
+    ):
+        """Test get_row_id raises IndexError for invalid position."""
+        with pytest.raises(IndexError):
+            parameter_repository.get_row_id(999)
+
+    def test_get_row_position_returns_index(self, parameter_repository):
+        """Test get_row_position returns position from identifier."""
+        position = parameter_repository.get_row_position("k2")
+
+        assert position == 1
+
+    def test_get_row_position_raises_for_invalid_id(
+        self, parameter_repository
+    ):
+        """Test get_row_position raises KeyError for invalid ID."""
+        with pytest.raises(KeyError):
+            parameter_repository.get_row_position("nonexistent")
+
+
+class TestAdvancedColumnMutations:
+    """Test advanced column mutation methods for undo/redo support."""
+
+    def test_insert_column_at_beginning(self, parameter_repository):
+        """Test insert_column_at inserts at position 0."""
+        parameter_repository.insert_column_at(0, "newFirst", "default")
+
+        columns = parameter_repository.column_names()
+        assert columns[0] == "newFirst"
+        # Check all rows have the default value
+        for i in range(parameter_repository.row_count()):
+            assert parameter_repository.get_cell(i, "newFirst") == "default"
+
+    def test_insert_column_at_middle(self, parameter_repository):
+        """Test insert_column_at inserts at middle position."""
+        columns_before = parameter_repository.column_names()
+        insert_pos = len(columns_before) // 2
+
+        parameter_repository.insert_column_at(insert_pos, "newMiddle", 42)
+
+        columns_after = parameter_repository.column_names()
+        assert columns_after[insert_pos] == "newMiddle"
+        # Check value
+        assert parameter_repository.get_cell(0, "newMiddle") == 42
+
+    def test_insert_column_at_end(self, parameter_repository):
+        """Test insert_column_at appends at the end."""
+        columns_before = parameter_repository.column_names()
+        end_pos = len(columns_before)
+
+        parameter_repository.insert_column_at(end_pos, "newLast", "end")
+
+        columns_after = parameter_repository.column_names()
+        assert columns_after[-1] == "newLast"
+        assert parameter_repository.get_cell(0, "newLast") == "end"
+
+    def test_get_column_position_returns_index(self, parameter_repository):
+        """Test get_column_position returns column position."""
+        position = parameter_repository.get_column_position("nominalValue")
+
+        assert isinstance(position, int)
+        assert position >= 0
+
+    def test_get_column_position_raises_for_invalid_column(
+        self, parameter_repository
+    ):
+        """Test get_column_position raises KeyError for invalid column."""
+        with pytest.raises(KeyError):
+            parameter_repository.get_column_position("nonexistent")
+
+
+class TestSearchMethods:
+    """Test search and find methods."""
+
+    def test_find_cells_basic_search(self, parameter_repository):
+        """Test find_cells finds matching cells."""
+        matches = parameter_repository.find_cells("1")
+
+        assert len(matches) > 0
+        # Each match should be (row_idx, col_name, value)
+        assert all(len(match) == 3 for match in matches)
+
+    def test_find_cells_case_sensitive(self, measurement_repository):
+        """Test find_cells respects case sensitivity."""
+        # Add some test data with different cases
+        measurement_repository.add_row(
+            {"observableId": "OBS_UPPER", "simulationConditionId": "cond1"}
+        )
+
+        matches_insensitive = measurement_repository.find_cells(
+            "obs", case_sensitive=False
+        )
+        matches_sensitive = measurement_repository.find_cells(
+            "obs", case_sensitive=True
+        )
+
+        # Case-insensitive should find more matches
+        assert len(matches_insensitive) >= len(matches_sensitive)
+
+    def test_find_cells_regex_search(self, parameter_repository):
+        """Test find_cells with regex patterns."""
+        # Search for k followed by digit
+        matches = parameter_repository.find_cells(r"k\d+", regex=True)
+
+        assert len(matches) > 0
+        # All matches should have 'k' followed by digits in index
+        for _row_idx, col_name, value in matches:
+            if col_name == "_index_":
+                assert value.startswith("k")
+
+    def test_find_cells_searches_index(self, parameter_repository):
+        """Test find_cells searches row identifiers."""
+        matches = parameter_repository.find_cells("k1")
+
+        # Should find "k1" in the index
+        index_matches = [m for m in matches if m[1] == "_index_"]
+        assert len(index_matches) > 0
+
+    def test_find_cells_returns_empty_for_no_matches(
+        self, parameter_repository
+    ):
+        """Test find_cells returns empty list when no matches found."""
+        matches = parameter_repository.find_cells("NONEXISTENT_STRING_12345")
+
+        assert matches == []
+
+    def test_find_cells_with_numeric_values(self, parameter_repository):
+        """Test find_cells can find numeric values."""
+        matches = parameter_repository.find_cells("1.0")
+
+        assert len(matches) > 0
+        # Should find the nominalValue 1.0
+        value_matches = [m for m in matches if m[2] == 1.0]
+        assert len(value_matches) > 0

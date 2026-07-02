@@ -204,6 +204,80 @@ class PandasTableRepository:
                 return result
         return ValidationResult.valid()
 
+    def add_row_with_id(
+        self, row_id: str, data: dict, preserve_dtypes: bool = True
+    ) -> None:
+        """Add row with custom identifier and preserve column dtypes."""
+        # Store current dtypes if needed
+        if preserve_dtypes:
+            dtypes = self._data_frame.dtypes.copy()
+
+        # Fill missing columns with empty string
+        new_row = {}
+        for col in self._data_frame.columns:
+            new_row[col] = data.get(col, "")
+
+        # Add row with custom index
+        new_df_row = pd.DataFrame([new_row], index=[row_id])
+        self._data_frame = pd.concat(
+            [self._data_frame, new_df_row], ignore_index=False
+        )
+
+        # Restore dtypes if needed
+        if preserve_dtypes:
+            for col in dtypes.index:
+                try:
+                    self._data_frame[col] = self._data_frame[col].astype(
+                        dtypes[col]
+                    )
+                except (ValueError, TypeError):
+                    # If conversion fails, keep the current dtype
+                    pass
+
+    def restore_row_at_position(
+        self, position: int, row_id: str, data: dict
+    ) -> None:
+        """Restore row at exact position with specific ID."""
+        # Fill missing columns with empty string
+        new_row = {}
+        for col in self._data_frame.columns:
+            new_row[col] = data.get(col, "")
+
+        # Create new row
+        new_df_row = pd.DataFrame([new_row], index=[row_id])
+
+        # Split DataFrame at position and insert
+        if position == 0:
+            # Insert at beginning
+            self._data_frame = pd.concat(
+                [new_df_row, self._data_frame], ignore_index=False
+            )
+        elif position >= len(self._data_frame):
+            # Insert at end
+            self._data_frame = pd.concat(
+                [self._data_frame, new_df_row], ignore_index=False
+            )
+        else:
+            # Insert in middle
+            before = self._data_frame.iloc[:position]
+            after = self._data_frame.iloc[position:]
+            self._data_frame = pd.concat(
+                [before, new_df_row, after], ignore_index=False
+            )
+
+    def rename_index(self, old_id: str, new_id: str) -> None:
+        """Rename row identifier."""
+        if old_id in self._data_frame.index:
+            self._data_frame.rename(index={old_id: new_id}, inplace=True)
+
+            # Update invalid cells tracking
+            updated_invalid = {}
+            for (r, c), msg in self._invalid_cells.items():
+                # Row indices in _invalid_cells are positions, not IDs
+                # So we don't need to update them
+                updated_invalid[(r, c)] = msg
+            self._invalid_cells = updated_invalid
+
     # Column mutations
     def add_column(self, column_name: str, default_value: Any = "") -> None:
         """Add column to all rows with default value."""
@@ -235,6 +309,13 @@ class PandasTableRepository:
                     updated_invalid[(r, c)] = msg
             self._invalid_cells = updated_invalid
 
+    def insert_column_at(
+        self, position: int, column_name: str, default_value: Any = ""
+    ) -> None:
+        """Insert column at specific position."""
+        # Create new column with default value
+        self._data_frame.insert(position, column_name, default_value)
+
     # Bulk operations
     def clear_all_rows(self) -> None:
         """Remove all rows (keeps columns and structure)."""
@@ -262,6 +343,62 @@ class PandasTableRepository:
             self._data_frame.rename(index={old_text: new_text}, inplace=True)
 
         return changed_cells
+
+    def find_cells(
+        self,
+        pattern: str,
+        regex: bool = False,
+        case_sensitive: bool = False,
+    ) -> list[tuple[int, str, Any]]:
+        """Find all cells matching pattern."""
+        import re as regex_module
+
+        matches = []
+
+        # Prepare pattern for matching
+        if not case_sensitive and not regex:
+            pattern_lower = pattern.lower()
+
+        # Search in cells
+        for row_idx in range(len(self._data_frame)):
+            for col in self._data_frame.columns:
+                value = self._data_frame.iloc[
+                    row_idx, self._data_frame.columns.get_loc(col)
+                ]
+                value_str = str(value)
+
+                # Check for match
+                if regex:
+                    flags = 0 if case_sensitive else regex_module.IGNORECASE
+                    if regex_module.search(pattern, value_str, flags):
+                        matches.append((row_idx, col, value))
+                else:
+                    # Simple string matching
+                    if case_sensitive:
+                        if pattern in value_str:
+                            matches.append((row_idx, col, value))
+                    else:
+                        if pattern_lower in value_str.lower():
+                            matches.append((row_idx, col, value))
+
+        # Also search in index
+        for row_idx, row_id in enumerate(self._data_frame.index):
+            row_id_str = str(row_id)
+
+            # Check for match in index
+            if regex:
+                flags = 0 if case_sensitive else regex_module.IGNORECASE
+                if regex_module.search(pattern, row_id_str, flags):
+                    matches.append((row_idx, "_index_", row_id))
+            else:
+                if case_sensitive:
+                    if pattern in row_id_str:
+                        matches.append((row_idx, "_index_", row_id))
+                else:
+                    if pattern_lower in row_id_str.lower():
+                        matches.append((row_idx, "_index_", row_id))
+
+        return matches
 
     # Metadata
     def row_count(self) -> int:

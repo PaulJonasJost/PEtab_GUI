@@ -582,31 +582,45 @@ class TableController(QObject):
 
         from ..commands import ModifyDataFrameCommand
 
-        df = self.model._data_frame
+        # Use repository to find matching cells
         changes = {}  # Will store {(row_id, col_name): (old_val, new_val)}
 
-        # Find all matching cells and store old values
-        for col in df.columns:
-            for _row_idx, row_id in enumerate(df.index):
-                old_val = df.at[row_id, col]
-                if pd.isna(old_val):
-                    continue
+        # Find all matching cells using repository
+        matches = self.model.repository.find_cells(
+            search_text, regex=regex, case_sensitive=case_sensitive
+        )
 
-                matched, new_str = self._find_and_replace_in_text(
-                    str(old_val),
-                    search_text,
-                    replace_text,
-                    case_sensitive,
-                    regex,
-                )
+        # Process matches and apply replacements
+        for row_idx, col_name, old_val in matches:
+            # Skip index matches for now (handled separately)
+            if col_name == "_index_":
+                continue
 
-                if matched and new_str != str(old_val):
-                    changes[(row_id, col)] = (old_val, new_str)
+            if pd.isna(old_val):
+                continue
+
+            matched, new_str = self._find_and_replace_in_text(
+                str(old_val),
+                search_text,
+                replace_text,
+                case_sensitive,
+                regex,
+            )
+
+            if matched and new_str != str(old_val):
+                # Get row_id from repository
+                row_id = self.model.repository.get_row_id(row_idx)
+                changes[(row_id, col_name)] = (old_val, new_str)
 
         # Replace in the index as well
         index_renames = []  # Collect index renames for undo support
-        if isinstance(df.index, pd.Index) and df.index.name:
-            for row_idx, row_id in enumerate(df.index):
+        # Check if table has named index
+        if self.model._has_named_index:
+            # Find index matches from find_cells results
+            for row_idx, col_name, row_id in matches:
+                if col_name != "_index_":
+                    continue
+
                 matched, new_str = self._find_and_replace_in_text(
                     str(row_id),
                     search_text,
@@ -648,10 +662,11 @@ class TableController(QObject):
                 self.model.undo_stack.endMacro()
             else:
                 # Fallback: apply changes directly if no undo stack
-                for (row_id, col), (_old_val, new_val) in changes.items():
-                    df.at[row_id, col] = new_val
+                for (row_id, col_name), (_old_val, new_val) in changes.items():
+                    row_pos = self.model.repository.get_row_position(row_id)
+                    self.model.repository.set_cell(row_pos, col_name, new_val)
                 for old_id, new_id, _ in index_renames:
-                    df.rename(index={old_id: new_id}, inplace=True)
+                    self.model.repository.rename_index(old_id, new_id)
 
     def get_columns(self):
         """Get the columns of the table."""

@@ -574,10 +574,9 @@ class PandasTableModel(QAbstractTableModel):
                 model_idx = self.index(row, col_idx)
                 self.dataChanged.emit(model_idx, model_idx, [Qt.DisplayRole])
 
-        # Also replace in the index (still needs DataFrame for named
-        # index handling)
+        # Also replace in the index using repository
         if self._has_named_index and old_text in self._data_frame.index:
-            self._data_frame.rename(index={old_text: new_text}, inplace=True)
+            self.repository.rename_index(old_text, new_text)
             index_row = self._data_frame.index.get_loc(new_text)
             index_top_left = self.index(index_row, 0)
             index_bottom_right = self.index(index_row, 0)
@@ -1032,22 +1031,26 @@ class PandasTableModel(QAbstractTableModel):
             data.pop(key, None)
         data_to_add.update(data)
         if index_key and self._has_named_index:
+            # Get current row ID using repository
+            old_row_id = self.repository.get_row_id(row_position)
             self.undo_stack.push(
                 RenameIndexCommand(
                     self,
-                    self._data_frame.index.tolist()[row_position],
+                    old_row_id,
                     index_key,
                     self.index(row_position, 0),
                 )
             )
         if index_key is None:
-            index_key = self._data_frame.index.tolist()[row_position]
+            index_key = self.repository.get_row_id(row_position)
 
-        changes = {
-            (index_key, col): (self._data_frame.at[index_key, col], val)
-            for col, val in data_to_add.items()
-            if val not in [self._data_frame.at[index_key, col], "", None]
-        }
+        # Build changes dict using repository for cell access
+        changes = {}
+        for col, val in data_to_add.items():
+            # Get current cell value using repository
+            old_val = self.repository.get_cell(row_position, col)
+            if val not in [old_val, "", None]:
+                changes[(index_key, col)] = (old_val, val)
         self.undo_stack.push(
             ModifyDataFrameCommand(self, changes, "Fill values")
         )

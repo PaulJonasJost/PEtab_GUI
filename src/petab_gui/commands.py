@@ -136,12 +136,15 @@ class ModifyColumnCommand(QUndoCommand):
             self.model.beginInsertColumns(
                 QModelIndex(), self.position, self.position
             )
-            # Restore column with old values
-            # Repository doesn't support positional insert, use DataFrame
-            df = self.model._data_frame
-            # Convert dict back to Series for insert
-            old_values_series = pd.Series(self.old_values)
-            df.insert(self.position, self.column_name, old_values_series)
+            # Restore column with old values at original position
+            self.model.repository.insert_column_at(
+                self.position, self.column_name, ""
+            )
+            # Restore the old values
+            for row_idx, value in enumerate(self.old_values.values()):
+                self.model.repository.set_cell(
+                    row_idx, self.column_name, value
+                )
             self.model.endInsertColumns()
 
 
@@ -194,8 +197,10 @@ class ModifyRowCommand(QUndoCommand):
         """Generate default row indices based on table type and index type."""
         base = 0
         # Get existing indices through repository
-        df = self.model._data_frame
-        existing = set(df.index.astype(str))
+        existing = set()
+        for row_idx in range(self.model.repository.row_count()):
+            row_id = self.model.repository.get_row_id(row_idx)
+            existing.add(str(row_id))
 
         indices = []
         while len(indices) < count:

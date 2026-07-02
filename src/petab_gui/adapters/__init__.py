@@ -1,12 +1,11 @@
-"""Adapters layer - infrastructure implementations.
+"""Adapters layer - Enable swithcing between differend data modes
 
 This package contains implementations of domain protocols for specific
-technologies:
+data types:
 - PandasTableRepository: pandas DataFrame adapter
 - PydanticTableRepository: pydantic models adapter (future)
 
-Adapters sit at the seam - they can be swapped without changing domain or
-controller code.
+Adapters can be swapped without changing domain or controller code.
 """
 
 from .pandas_table_repository import PandasTableRepository
